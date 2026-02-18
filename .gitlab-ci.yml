@@ -2,7 +2,7 @@ stages:
   - validate
   - test
 
-image: python:3.12
+image: python:3.11
 
 variables:
   DJANGO_SETTINGS_MODULE: "mptcourse.settings"
