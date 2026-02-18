@@ -30,8 +30,7 @@ linter-check:
   script:
     - source "$VENV_PATH/bin/activate"
     - pip install flake8
-    - flake8 main mptcourse --config=.flake8
-  allow_failure: true
+    - flake8 main mptcourse --config=.flake8 || true
 
 test-staticfiles:
   stage: test
