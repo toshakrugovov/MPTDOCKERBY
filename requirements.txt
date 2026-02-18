@@ -75,6 +75,4 @@ reportlab==4.2.5
 pypdf>=3.0.0
 python-pptx>=0.6.0
 dj-database-url==2.1.0
-drf-yasg==1.21.7
-setuptools>=65.0.0
 influxdb-client==1.49.0
