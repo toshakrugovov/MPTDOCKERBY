@@ -32,6 +32,7 @@ django-import-export==3.3.4
 django-js-asset==3.1.2
 django-picklefield==3.3
 django-q2==1.8.0
+drf-yasg==1.21.7
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.1
 et_xmlfile==2.0.0
