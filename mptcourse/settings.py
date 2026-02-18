@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',  # Для обслуживания статических файлов в DEBUG режиме
     'rest_framework',
-    'drf_yasg',
+     #'drf_yasg',
     'main.apps.MainConfig',
 ]
 
