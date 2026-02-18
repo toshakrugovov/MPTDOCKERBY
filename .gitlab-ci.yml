@@ -33,8 +33,8 @@ validate-migrations:
 linter-check:
   stage: validate
   script:
-    - source "$VENV_PATH/bin/activate" && pip install flake8 && flake8 main mptcourse --config=.flake8 --ignore=E1,E12,E13,E22,E24,W2,E50,W5 --max-line-length=120
-8
+    - source "$VENV_PATH/bin/activate" pip install flake8 && flake8 main mptcourse --config=.flake8 --ignore=E1,E12,E13,E22,E24,W2,E50,W5 --max-line-length=120
+
 
 test-staticfiles:
   stage: test
