@@ -9,35 +9,39 @@ variables:
   VENV_PATH: ".venv"
 
 before_script:
+  # удаляем старое окружение и создаём новое
   - rm -rf $VENV_PATH
   - python3 -m venv $VENV_PATH
-  - source $VENV_PATH/bin/activate
-  - pip install --upgrade pip
+  # обновляем pip и устанавливаем зависимости
+  - $VENV_PATH/bin/pip install --upgrade pip
+  - $VENV_PATH/bin/pip install -r requirements.txt
 
 validate-django-settings:
   stage: validate
   script:
     - echo "Проверка настроек Django"
-    - python3 manage.py check
+    - $VENV_PATH/bin/python manage.py check
     - echo "Настройки Django валидны"
 
 validate-migrations:
   stage: validate
   script:
     - echo "Проверка миграций Django"
-    - python3 manage.py makemigrations --check --dry-run
+    - $VENV_PATH/bin/python manage.py makemigrations --check --dry-run
     - echo "Миграции валидны"
 
 linter-check:
   stage: validate
   script:
     - echo "Проверка синтаксиса и стиля линтером (flake8)"
-    - flake8 main mptcourse --config=.flake8
+    - $VENV_PATH/bin/pip install flake8
+    - $VENV_PATH/bin/flake8 main mptcourse --config=.flake8
     - echo "Линтер прошёл успешно"
 
 test-staticfiles:
   stage: test
   script:
     - echo "Проверка статик-файлов Django"
-    - python3 manage.py collectstatic --noinput --dry-run
+    - $VENV_PATH/bin/python manage.py collectstatic --noinput --dry-run
     - echo "Статические файлы валидны"
+ 
