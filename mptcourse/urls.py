@@ -9,15 +9,14 @@ from main import views
 from main.metrics_view import metrics_export
 from main.metrics_influxdb_view import metrics_influxdb_export, metrics_influxdb_check, metrics_influxdb_cleanup, metrics_influxdb_telegraf_view
 
-schema_view = get_schema_view(
-    openapi.Info(
-        title="MPTCOURSE API",
-        default_version='v1',
-        description="API документация",
-    ),
-    public=True,
-    permission_classes=[permissions.AllowAny],
-)
+#schema_view = get_schema_view(
+  ## title="MPTCOURSE API",
+      #  default_version='v1',
+       # description="API документация",
+   # ),
+   # public=True,
+   # permission_classes=[permissions.AllowAny],
+#)
 
 urlpatterns = [
     # favicon, чтобы не падать на кастомном handler404/500
@@ -89,9 +88,9 @@ urlpatterns = [
     # Django Admin (после кастомных путей)
     path('admin/', admin.site.urls),
     path('', include('main.urls')),
-    re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    #re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    #path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    #path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     # Prometheus metrics endpoints
     path('metrics/', metrics_export, name='metrics'),  # Кастомные + стандартные метрики
     path('prometheus/metricks', metrics_export, name='prometheus_metrics'),  # Для совместимости с Prometheus конфигом
