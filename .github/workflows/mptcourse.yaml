@@ -4,70 +4,63 @@ on:
   push:
     branches: [ master ]
 
-  #pull_request:
-
 jobs:
   validate:
-    name: Validate Django project
+    name: Проверка Django проекта
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Получение репозитория
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Установка Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12.3'
         
-      - name: Create venv and install lids
+      - name: Создание venv и установка зависимостей
         run: |
           python3 -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
 
-
-      - name: Check django project
+      - name: Проверка проекта Django
         run: |
           source .venv/bin/activate
           echo "Проверка настроек Django"
           python3 manage.py check
           echo "Настройки валидны"
 
-      - name: Check django migrations
+      - name: Проверка миграций Django
         run: |
           source .venv/bin/activate
-          echo "Проверка миграций django"
-          python3 manage.py makemigrations --check  --dry-run
+          echo "Проверка миграций Django"
+          python3 manage.py makemigrations --check --dry-run
           echo "Миграции валидны"
 
   test: 
-    name: Test Dgango static file
+    name: Проверка статических файлов Django
     runs-on: ubuntu-latest
     needs: validate
     steps:
-      - name: Set up Python
-        uses: actions/checkout@v6
+      - name: Получение репозитория
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Установка Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12.3'
       
-      - name: Create venv and install lids
+      - name: Создание venv и установка зависимостей
         run: |
           python3 -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Check Django static file
+      - name: Проверка статических файлов Django
         run: |
           source .venv/bin/activate
-          echo "Проверка статик-файлов django"
+          echo "Проверка статических файлов Django"
           python3 manage.py collectstatic --noinput --dry-run
-          echo "Статики валидны"
-
-      
-
-
+          echo "Статические файлы валидны"
