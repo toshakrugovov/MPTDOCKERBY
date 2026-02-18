@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
 
+env:
+  DJANGO_SETTINGS_MODULE: mptcourse.settings
+  VENV_PATH: .venv
+
 jobs:
   validate:
     name: Проверка Django проекта
@@ -19,24 +23,25 @@ jobs:
         
       - name: Создание venv и установка зависимостей
         run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
+          python3 -m venv "$VENV_PATH"
+          source "$VENV_PATH/bin/activate"
           pip install -r requirements.txt
 
-      - name: Проверка проекта Django
+      - name: Проверка настроек Django
         run: |
-          source .venv/bin/activate
-          echo "Проверка настроек Django"
-          python3 manage.py check
-          echo "Настройки валидны"
+          source "$VENV_PATH/bin/activate"
+          python manage.py check
 
       - name: Проверка миграций Django
         run: |
-          source .venv/bin/activate
-          echo "Проверка миграций Django"
-          python3 manage.py makemigrations --check --dry-run
-          echo "Миграции валидны"
+          source "$VENV_PATH/bin/activate"
+          python manage.py makemigrations --check --dry-run
+
+      - name: Проверка flake8
+        run: |
+          source "$VENV_PATH/bin/activate"
+          pip install flake8
+          flake8 main mptcourse --config=.flake8 || true
 
   test: 
     name: Проверка статических файлов Django
@@ -53,14 +58,11 @@ jobs:
       
       - name: Создание venv и установка зависимостей
         run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
+          python3 -m venv "$VENV_PATH"
+          source "$VENV_PATH/bin/activate"
           pip install -r requirements.txt
 
       - name: Проверка статических файлов Django
         run: |
-          source .venv/bin/activate
-          echo "Проверка статических файлов Django"
-          python3 manage.py collectstatic --noinput --dry-run
-          echo "Статические файлы валидны"
+          source "$VENV_PATH/bin/activate"
+          python manage.py collectstatic --noinput
