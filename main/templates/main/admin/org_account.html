@@ -65,12 +65,15 @@
                 {% csrf_token %}
                 <div class="form-group">
                     <label for="tax_amount">Сумма к оплате:</label>
-                    <input type="number" name="amount" id="tax_amount" step="0.01" min="0.01" max="{{ org_account.tax_reserve }}" required class="form-control" placeholder="0.00" value="">
+                    <input type="number" name="amount" id="tax_amount" step="0.01" min="0.01" max="{{ available_for_tax_payment }}" required class="form-control" placeholder="0.00" value="">
                     <small id="tax_error" class="form-error" style="display: none; margin-top: 4px;"></small>
-                    <small style="color: var(--text-color-secondary);">Доступно в резерве: <strong id="available_tax_reserve">{{ org_account.tax_reserve }}</strong> ₽</small>
-                    <small style="color: var(--text-color-secondary); display: block; margin-top: 4px;">Баланс организации: <strong id="available_balance_tax">{{ org_account.balance }}</strong> ₽</small>
+                    <small style="color: var(--text-color-secondary);">Налог оплачивается из резерва на налоги. Доступно для оплаты: <strong id="available_for_tax_payment">{{ available_for_tax_payment }}</strong> ₽</small>
+                    {% if org_account.balance < org_account.tax_reserve %}
+                    <small style="color: var(--text-color-secondary); display: block; margin-top: 4px;">Сумма к оплате ограничена балансом организации ({{ org_account.balance }} ₽).</small>
+                    {% endif %}
+                    <small style="color: var(--text-color-secondary); display: block; margin-top: 4px;">Баланс организации: <strong>{{ org_account.balance }}</strong> ₽ · Резерв на налоги: <strong>{{ org_account.tax_reserve }}</strong> ₽</small>
                 </div>
-                <button type="submit" class="btn" id="pay_tax_btn" {% if org_account.tax_reserve <= 0 %}disabled{% endif %}>Оплатить налог</button>
+                <button type="submit" class="btn" id="pay_tax_btn" {% if available_for_tax_payment <= 0 %}disabled{% endif %}>Оплатить налог</button>
             </form>
         </div>
     </div>
@@ -146,8 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const taxAmount = document.getElementById('tax_amount');
     const taxError = document.getElementById('tax_error');
     const payTaxBtn = document.getElementById('pay_tax_btn');
-    const availableTaxReserve = parseFloat(document.getElementById('available_tax_reserve').textContent) || 0;
-    const availableBalanceTax = parseFloat(document.getElementById('available_balance_tax').textContent) || 0;
+    const availableForTaxPayment = parseFloat(document.getElementById('available_for_tax_payment').textContent.replace(/\s/g, '').replace(',', '.')) || 0;
     
     // Валидация вывода средств
     if (withdrawAmount) {
@@ -233,13 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 taxError.style.display = 'block';
                 payTaxBtn.disabled = true;
                 this.style.borderColor = 'var(--input-border)';
-            } else if (amount > availableTaxReserve) {
-                taxError.textContent = `Недостаточно средств в резерве на налоги. Доступно: ${availableTaxReserve.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
-                taxError.style.display = 'block';
-                payTaxBtn.disabled = true;
-                this.style.borderColor = 'var(--input-border)';
-            } else if (amount > availableBalanceTax) {
-                taxError.textContent = `Недостаточно средств на счете организации. Доступно: ${availableBalanceTax.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
+            } else if (amount > availableForTaxPayment) {
+                taxError.textContent = `Недостаточно средств. Доступно для оплаты: ${availableForTaxPayment.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
                 taxError.style.display = 'block';
                 payTaxBtn.disabled = true;
                 this.style.borderColor = 'var(--input-border)';
@@ -254,12 +251,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pay-tax-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const amount = parseFloat(taxAmount.value) || 0;
-            if (amount <= 0 || amount > availableTaxReserve || amount > availableBalanceTax) {
-                if (amount > availableTaxReserve) {
-                    taxError.textContent = `Недостаточно средств в резерве на налоги. Доступно: ${availableTaxReserve.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
-                } else if (amount > availableBalanceTax) {
-                    taxError.textContent = `Недостаточно средств на счете организации. Доступно: ${availableBalanceTax.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
-                }
+            if (amount <= 0 || amount > availableForTaxPayment) {
+                taxError.textContent = `Недостаточно средств. Доступно для оплаты: ${availableForTaxPayment.toFixed(2)} ₽, запрошено: ${amount.toFixed(2)} ₽`;
                 taxError.style.display = 'block';
                 taxAmount.focus();
                 return false;

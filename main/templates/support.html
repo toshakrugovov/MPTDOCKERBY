@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Техническая поддержка - MPTCOURSE{% endblock %}
@@ -30,40 +30,48 @@
         </form>
     </div>
     
-    <!-- История обращений -->
+    <!-- История обращений (загрузка через API) -->
     <div class="tickets-container">
         <h2>Мои обращения</h2>
-        {% if tickets %}
-        <div class="tickets-list">
-            {% for ticket in tickets %}
-            <div class="ticket-item">
-                <div class="ticket-header">
-                    <div class="ticket-info">
-                        <h3 class="ticket-subject">{{ ticket.subject }}</h3>
-                        <span class="ticket-date">{{ ticket.created_at|date:"d.m.Y H:i" }}</span>
-                    </div>
-                    <span class="ticket-status status-{{ ticket.ticket_status }}">{{ ticket.get_status_display|default:ticket.ticket_status }}</span>
-                </div>
-                <div class="ticket-message">
-                    <p>{{ ticket.message_text|truncatewords:30 }}</p>
-                </div>
-                {% if ticket.response_text %}
-                <div class="ticket-response">
-                    <strong>Ответ поддержки:</strong>
-                    <p>{{ ticket.response_text }}</p>
-                </div>
-                {% endif %}
-                <a href="{% url 'support_ticket_detail' ticket.id %}" class="btn-view">Подробнее</a>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="no-tickets">У вас пока нет обращений в поддержку</p>
-        {% endif %}
+        <div id="tickets-loading">Загрузка обращений...</div>
+        <div class="tickets-list" id="tickets-list" style="display: none;"></div>
+        <p class="no-tickets" id="tickets-empty" style="display: none;">У вас пока нет обращений в поддержку</p>
     </div>
 </div>
 
 <script>
+(function loadTickets() {
+    var loading = document.getElementById('tickets-loading');
+    var listEl = document.getElementById('tickets-list');
+    var empty = document.getElementById('tickets-empty');
+    if (!loading || !listEl) return;
+    fetch('/api/support/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            var tickets = Array.isArray(data) ? data : (data.tickets || data.results || []);
+            if (tickets.length === 0) {
+                empty.style.display = 'block';
+                return;
+            }
+            listEl.style.display = 'block';
+            listEl.innerHTML = '';
+            tickets.forEach(function(t) {
+                var created = t.created_at ? new Date(t.created_at).toLocaleString('ru-RU') : '';
+                var status = t.ticket_status || t.status || '';
+                var statusLabel = status === 'new' ? 'Новое' : status === 'in_progress' ? 'В работе' : status === 'closed' ? 'Закрыто' : status;
+                var msg = (t.message_text || '').substring(0, 100);
+                if ((t.message_text || '').length > 100) msg += '...';
+                var html = '<div class="ticket-item"><div class="ticket-header"><div class="ticket-info"><h3 class="ticket-subject">' + (t.subject || '').replace(/</g, '&lt;') + '</h3><span class="ticket-date">' + created + '</span></div><span class="ticket-status status-' + status + '">' + statusLabel + '</span></div><div class="ticket-message"><p>' + msg.replace(/</g, '&lt;') + '</p></div>';
+                if (t.response_text) html += '<div class="ticket-response"><strong>Ответ поддержки:</strong><p>' + (t.response_text || '').replace(/</g, '&lt;') + '</p></div>';
+                html += '<a href="/support/' + t.id + '/" class="btn-view">Подробнее</a></div>';
+                listEl.insertAdjacentHTML('beforeend', html);
+            });
+        })
+        .catch(function() {
+            loading.textContent = 'Ошибка загрузки обращений';
+        });
+})();
 function createTicket(event) {
     event.preventDefault();
     

@@ -35,8 +35,8 @@
         </div>
         <p style="margin-bottom: 24px; color: var(--text-color);">Ниже — история ваших заявлений на возврат средств за курсы. Вы можете открыть или скачать заявление в PDF.</p>
 
-        {% if refunds %}
-        <table class="refund-table">
+        <div id="refunds-loading">Загрузка заявлений...</div>
+        <table class="refund-table" id="refunds-table" style="display: none;">
             <thead>
                 <tr>
                     <th>№ заявления</th>
@@ -47,32 +47,37 @@
                     <th>PDF</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for r in refunds %}
-                <tr>
-                    <td><strong>{{ r.refund_number }}</strong></td>
-                    <td>{{ r.course_purchase.course.title }}</td>
-                    <td>{{ r.amount }} ₽</td>
-                    <td>{{ r.created_at|date:"d.m.Y H:i" }}</td>
-                    <td class="status-{{ r.status }}">
-                        {% if r.status == 'pending' %}На рассмотрении
-                        {% elif r.status == 'approved' %}Одобрен
-                        {% elif r.status == 'rejected' %}Отклонён
-                        {% else %}{{ r.status }}{% endif %}
-                    </td>
-                    <td>
-                        <div class="refund-pdf-buttons">
-                            <a href="{% url 'refund_request_pdf' r.id %}" class="btn-pdf" target="_blank">Открыть PDF</a>
-                            <a href="{% url 'refund_request_pdf' r.id %}?download=1" class="btn-pdf">Скачать PDF</a>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+            <tbody id="refunds-tbody"></tbody>
         </table>
-        {% else %}
-        <div class="empty-block">У вас пока нет заявлений на возврат.</div>
-        {% endif %}
+        <div class="empty-block" id="refunds-empty" style="display: none;">У вас пока нет заявлений на возврат.</div>
     </div>
 </div>
+<script>
+(function() {
+  fetch('/api/refund-requests/', { method: 'GET', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var loading = document.getElementById('refunds-loading');
+      var table = document.getElementById('refunds-table');
+      var tbody = document.getElementById('refunds-tbody');
+      var empty = document.getElementById('refunds-empty');
+      if (!loading || !tbody) return;
+      loading.style.display = 'none';
+      var list = (data && data.refund_requests) ? data.refund_requests : [];
+      if (list.length === 0) { empty.style.display = 'block'; return; }
+      table.style.display = 'table';
+      var statusText = { pending: 'На рассмотрении', approved: 'Одобрен', rejected: 'Отклонён' };
+      list.forEach(function(r) {
+        var created = r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '';
+        var status = statusText[r.status] || r.status;
+        var row = '<tr><td><strong>' + (r.refund_number || 'REF-'+r.id) + '</strong></td><td>' + (r.course_title || '') + '</td><td>' + r.amount + ' ₽</td><td>' + created + '</td><td class="status-' + r.status + '">' + status + '</td><td><div class="refund-pdf-buttons"><a href="/profile/refunds/' + r.id + '/pdf/" class="btn-pdf" target="_blank">Открыть PDF</a><a href="/profile/refunds/' + r.id + '/pdf/?download=1" class="btn-pdf">Скачать PDF</a></div></td></tr>';
+        tbody.insertAdjacentHTML('beforeend', row);
+      });
+    })
+    .catch(function() {
+      var loading = document.getElementById('refunds-loading');
+      if (loading) loading.textContent = 'Ошибка загрузки';
+    });
+})();
+</script>
 {% endblock %}

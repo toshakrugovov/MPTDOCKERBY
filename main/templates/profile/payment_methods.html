@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Мои способы оплаты - MPTCOURSE{% endblock %}
@@ -486,45 +486,64 @@ body:not(.dark-theme) .modal-form input {
         </form>
     </div>
 
-    <!-- Список способов оплаты -->
-    {% if payment_methods %}
-    <div class="payment-methods-list">
-        {% for payment in payment_methods %}
-        <div class="payment-method-card {% if payment.is_default %}default{% endif %}" onclick="openCardModal({{ payment.id }})" style="cursor: pointer;">
-            {% if payment.is_default %}
-            <div class="payment-badge">Основной</div>
-            {% endif %}
-            <div class="payment-method-header">
-                <div class="payment-method-title">
-                    {{ payment.card_type|upper|default:"CARD" }} {{ payment.mask_card_number }}
-                </div>
-            </div>
-            <div class="payment-method-details">
-                <p><strong>Держатель карты:</strong> {{ payment.card_holder_name }}</p>
-                <p><strong>Срок действия:</strong> {{ payment.expiry_month }}/{{ payment.expiry_year }}</p>
-            </div>
-            <div class="payment-method-actions" onclick="event.stopPropagation();">
-                {% if not payment.is_default %}
-                <form method="post" action="{% url 'set_default_payment_method' payment.id %}" style="display: inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-secondary btn-small">Сделать основным</button>
-                </form>
-                {% endif %}
-                <form method="post" action="{% url 'delete_payment_method' payment.id %}" style="display: inline;" onsubmit="return confirm('Вы уверены, что хотите удалить этот способ оплаты?')">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger btn-small">Удалить</button>
-                </form>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-payment-methods">
+    <!-- Список способов оплаты (загрузка через API) -->
+    <div id="payment-methods-loading">Загрузка способов оплаты...</div>
+    <div class="payment-methods-list" id="payment-methods-list" style="display: none;"></div>
+    <div class="empty-payment-methods" id="payment-methods-empty" style="display: none;">
         <h2>У вас пока нет сохраненных способов оплаты</h2>
         <p>Добавьте способ оплаты, чтобы быстрее оформлять заказы</p>
     </div>
-    {% endif %}
 </div>
+<script>
+(function loadPaymentMethods() {
+    var loading = document.getElementById('payment-methods-loading');
+    var listEl = document.getElementById('payment-methods-list');
+    var emptyEl = document.getElementById('payment-methods-empty');
+    if (!loading || !listEl) return;
+    fetch('/api/payment-methods/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            var list = Array.isArray(data) ? data : (data.payment_methods || data.cards || []);
+            if (list.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+            listEl.style.display = 'block';
+            listEl.innerHTML = '';
+            list.forEach(function(p) {
+                var mask = p.mask_card_number || ('**** ' + (p.card_number || '****'));
+                var cardType = (p.card_type || 'CARD').toUpperCase();
+                var defaultClass = p.is_default ? ' default' : '';
+                var badge = p.is_default ? '<div class="payment-badge">Основной</div>' : '';
+                var setDefaultBtn = p.is_default ? '' : '<button type="button" class="btn btn-secondary btn-small" onclick="setDefaultCard(' + p.id + ')">Сделать основным</button>';
+                var card = '<div class="payment-method-card' + defaultClass + '" onclick="openCardModal(' + p.id + ')" style="cursor: pointer;">' + badge +
+                    '<div class="payment-method-header"><div class="payment-method-title">' + cardType + ' ' + mask + '</div></div>' +
+                    '<div class="payment-method-details"><p><strong>Держатель карты:</strong> ' + (p.card_holder_name || '').replace(/</g, '&lt;') + '</p><p><strong>Срок действия:</strong> ' + (p.expiry_month || '') + '/' + (p.expiry_year || '') + '</p></div>' +
+                    '<div class="payment-method-actions" onclick="event.stopPropagation();">' + setDefaultBtn +
+                    ' <button type="button" class="btn btn-danger btn-small" onclick="deleteCard(' + p.id + ')">Удалить</button></div></div>';
+                listEl.insertAdjacentHTML('beforeend', card);
+            });
+        })
+        .catch(function() {
+            loading.textContent = 'Ошибка загрузки';
+        });
+})();
+function getCsrfToken() {
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+}
+function setDefaultCard(id) {
+    fetch('/api/payment-methods/' + id + '/', { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({}) })
+        .then(function(r) { return r.json(); })
+        .then(function() { location.reload(); });
+}
+function deleteCard(id) {
+    if (!confirm('Вы уверены, что хотите удалить этот способ оплаты?')) return;
+    fetch('/api/payment-methods/' + id + '/', { method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }, credentials: 'same-origin' })
+        .then(function(r) { if (r.ok || r.status === 204) location.reload(); });
+}
+</script>
 
 <!-- Модальное окно карты -->
 <div class="modal-overlay" id="cardModal">

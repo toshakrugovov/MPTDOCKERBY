@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Мой баланс - MPTCOURSE{% endblock %}
@@ -332,99 +332,87 @@ body:not(.dark-theme) .transactions-section {
         <a href="{% url 'profile' %}">← Вернуться в профиль</a>
     </div>
 
-    <!-- Текущий баланс -->
+    <!-- Текущий баланс (загрузка через API) -->
     <div class="balance-card">
         <div class="balance-label">Текущий баланс</div>
-        <div class="balance-amount">{{ profile.balance }} ₽</div>
+        <div class="balance-amount" id="balance-amount">Загрузка...</div>
     </div>
 
-    <!-- Формы пополнения и вывода -->
+    <!-- Формы пополнения и вывода (заполняются через API) -->
     <div class="balance-actions">
-        <!-- Пополнение -->
         <div class="balance-form-card">
             <h2>Пополнить баланс</h2>
-            {% if saved_payments %}
-            <form method="post" action="{% url 'deposit_balance' %}">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label for="deposit_card_id">Выберите карту *</label>
-                    <select id="deposit_card_id" name="card_id" required>
-                        <option value="">-- Выберите карту --</option>
-                        {% for payment in saved_payments %}
-                        <option value="{{ payment.id }}">{{ payment.card_type|upper|default:"CARD" }} {{ payment.mask_card_number }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="deposit_amount">Сумма пополнения (₽)</label>
-                    <input type="number" id="deposit_amount" name="amount" min="1" step="0.01" required placeholder="1000">
-                </div>
-                <button type="submit" class="btn btn-primary">Пополнить</button>
-            </form>
-            {% else %}
-            <div class="empty-state">
-                <p>Для пополнения баланса необходимо добавить карту.</p>
-                <a href="{% url 'payment_methods' %}" class="btn btn-primary">Добавить карту</a>
-            </div>
-            {% endif %}
+            <div id="deposit-area">Загрузка...</div>
         </div>
-
-        <!-- Вывод -->
         <div class="balance-form-card">
             <h2>Вывести средства</h2>
-            {% if saved_payments %}
-            <form method="post" action="{% url 'withdraw_balance' %}">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label for="withdraw_card_id">Выберите карту *</label>
-                    <select id="withdraw_card_id" name="card_id" required>
-                        <option value="">-- Выберите карту --</option>
-                        {% for payment in saved_payments %}
-                        <option value="{{ payment.id }}">{{ payment.card_type|upper|default:"CARD" }} {{ payment.mask_card_number }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="withdraw_amount">Сумма вывода (₽)</label>
-                    <input type="number" id="withdraw_amount" name="amount" min="1" step="0.01" max="{{ profile.balance }}" required placeholder="1000">
-                </div>
-                <button type="submit" class="btn btn-secondary">Вывести</button>
-            </form>
-            {% else %}
-            <div class="empty-state">
-                <p>Для вывода средств необходимо добавить карту.</p>
-                <a href="{% url 'payment_methods' %}" class="btn btn-secondary">Добавить карту</a>
-            </div>
-            {% endif %}
+            <div id="withdraw-area">Загрузка...</div>
         </div>
     </div>
 
-    <!-- История транзакций -->
+    <!-- История транзакций (через API) -->
     <div class="transactions-section">
         <h2>История транзакций</h2>
-        {% if transactions %}
-        <div class="transactions-list">
-            {% for transaction in transactions %}
-            <div class="transaction-item">
-                <div class="transaction-info">
-                    <div class="transaction-type">{{ transaction.get_transaction_type_display }}</div>
-                    {% if transaction.description %}
-                    <div class="transaction-description">{{ transaction.description }}</div>
-                    {% endif %}
-                    <div class="transaction-date">{{ transaction.created_at|date:"d.m.Y H:i" }}</div>
-                </div>
-                <div class="transaction-amount {% if transaction.transaction_type == 'deposit' or transaction.transaction_type == 'order_refund' %}positive{% else %}negative{% endif %}">
-                    {% if transaction.transaction_type == 'deposit' or transaction.transaction_type == 'order_refund' %}+{% else %}-{% endif %}{{ transaction.amount }} ₽
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="empty-transactions">
-            <p>У вас пока нет транзакций</p>
-        </div>
-        {% endif %}
+        <div id="transactions-loading">Загрузка...</div>
+        <div class="transactions-list" id="transactions-list" style="display: none;"></div>
+        <div class="empty-transactions" id="transactions-empty" style="display: none;"><p>У вас пока нет транзакций</p></div>
     </div>
 </div>
+<script>
+(function() {
+    var balanceEl = document.getElementById('balance-amount');
+    var depositArea = document.getElementById('deposit-area');
+    var withdrawArea = document.getElementById('withdraw-area');
+    var transactionsLoading = document.getElementById('transactions-loading');
+    var transactionsList = document.getElementById('transactions-list');
+    var transactionsEmpty = document.getElementById('transactions-empty');
+    var paymentMethodsUrl = "{% url 'payment_methods' %}";
+    Promise.all([
+        fetch('/api/balance/', { method: 'GET', credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+        fetch('/api/payment-methods/', { method: 'GET', credentials: 'same-origin' }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+        var balanceData = results[0];
+        var cards = Array.isArray(results[1]) ? results[1] : (results[1].payment_methods || results[1].cards || []);
+        var balance = parseFloat(balanceData.balance || 0);
+        if (balanceEl) balanceEl.textContent = balance.toFixed(0) + ' ₽';
+        var cardOptions = cards.map(function(p) {
+            var mask = p.mask_card_number || ('**** ' + (p.card_number || '****'));
+            return '<option value="' + p.id + '">' + (p.card_type || 'CARD').toUpperCase() + ' ' + mask + '</option>';
+        }).join('');
+        if (cards.length) {
+            depositArea.innerHTML = '<form method="post" action="{% url 'deposit_balance' %}">{% csrf_token %}<div class="form-group"><label for="deposit_card_id">Выберите карту *</label><select id="deposit_card_id" name="card_id" required><option value="">-- Выберите карту --</option>' + cardOptions + '</select></div><div class="form-group"><label for="deposit_amount">Сумма пополнения (₽)</label><input type="number" id="deposit_amount" name="amount" min="1" step="0.01" required placeholder="1000"></div><button type="submit" class="btn btn-primary">Пополнить</button></form>';
+            withdrawArea.innerHTML = '<form method="post" action="{% url 'withdraw_balance' %}">{% csrf_token %}<div class="form-group"><label for="withdraw_card_id">Выберите карту *</label><select id="withdraw_card_id" name="card_id" required><option value="">-- Выберите карту --</option>' + cardOptions + '</select></div><div class="form-group"><label for="withdraw_amount">Сумма вывода (₽)</label><input type="number" id="withdraw_amount" name="amount" min="1" step="0.01" max="' + balance + '" required placeholder="1000"></div><button type="submit" class="btn btn-secondary">Вывести</button></form>';
+        } else {
+            depositArea.innerHTML = '<div class="empty-state"><p>Для пополнения баланса необходимо добавить карту.</p><a href="' + paymentMethodsUrl + '" class="btn btn-primary">Добавить карту</a></div>';
+            withdrawArea.innerHTML = '<div class="empty-state"><p>Для вывода средств необходимо добавить карту.</p><a href="' + paymentMethodsUrl + '" class="btn btn-secondary">Добавить карту</a></div>';
+        }
+        var transactions = balanceData.transactions || [];
+        if (transactionsLoading) transactionsLoading.style.display = 'none';
+        if (transactions.length === 0) {
+            if (transactionsEmpty) transactionsEmpty.style.display = 'block';
+        } else {
+            if (transactionsList) {
+                transactionsList.style.display = 'block';
+                transactionsList.innerHTML = '';
+                var typeLabels = { deposit: 'Пополнение', withdrawal: 'Вывод', order_refund: 'Возврат за заказ' };
+                transactions.forEach(function(t) {
+                    var typeLabel = typeLabels[t.transaction_type] || t.transaction_type || '';
+                    var desc = t.description || '';
+                    var created = t.created_at ? new Date(t.created_at).toLocaleString('ru-RU') : '';
+                    var isPos = t.transaction_type === 'deposit' || t.transaction_type === 'order_refund';
+                    var sign = isPos ? '+' : '-';
+                    var amount = parseFloat(t.amount || 0);
+                    transactionsList.insertAdjacentHTML('beforeend', '<div class="transaction-item"><div class="transaction-info"><div class="transaction-type">' + typeLabel + '</div>' + (desc ? '<div class="transaction-description">' + desc.replace(/</g, '&lt;') + '</div>' : '') + '<div class="transaction-date">' + created + '</div></div><div class="transaction-amount ' + (isPos ? 'positive' : 'negative') + '">' + sign + amount + ' ₽</div></div>');
+                });
+            }
+        }
+    }).catch(function() {
+        if (balanceEl) balanceEl.textContent = 'Ошибка';
+        if (depositArea) depositArea.textContent = 'Ошибка загрузки';
+        if (withdrawArea) withdrawArea.textContent = 'Ошибка загрузки';
+        if (transactionsLoading) transactionsLoading.textContent = 'Ошибка загрузки';
+    });
+})();
+</script>
 {% endblock %}
 

@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Оформление заказа - MPTCOURSE{% endblock %}
@@ -33,43 +33,15 @@
                     </label>
                 </div>
                 <div style="text-align: center; margin: 16px 0; color: var(--text-color-secondary);">или</div>
-
-                {% if user_balance > 0 %}
-                <div class="radio-item" style="margin-bottom: 12px;">
-                    <input type="radio" name="payment_method" id="payment_balance" value="balance" {% if user_balance >= cart.total_price %}{% else %}disabled{% endif %}>
-                    <label for="payment_balance">
-                        <div><strong>Личный счёт</strong></div>
-                        <div class="radio-item-info">Баланс: <strong>{{ user_balance }} ₽</strong>{% if user_balance < cart.total_price %}<span style="color: var(--text-color-secondary);"> (Недостаточно средств)</span>{% endif %}</div>
-                    </label>
+                <div id="checkout-payment-dynamic">
+                    <div id="checkout-payment-loading" style="padding: 12px; color: var(--text-color-secondary);">Загрузка способов оплаты...</div>
                 </div>
-                <div style="text-align: center; margin: 16px 0; color: var(--text-color-secondary);">или</div>
-                {% endif %}
-
-                {% if saved_payments %}
-                <div class="radio-group" style="margin-bottom: 20px;">
-                    {% for payment in saved_payments %}
-                    <div class="radio-item" data-card-balance="{{ payment.balance }}" data-card-id="{{ payment.id }}">
-                        <input type="radio" name="payment_method" id="saved_payment_{{ payment.id }}" value="card" data-saved-id="{{ payment.id }}">
-                        <label for="saved_payment_{{ payment.id }}">
-                            <div><strong>{{ payment.card_type|upper|default:"CARD" }} {{ payment.mask_card_number }}</strong></div>
-                            <div class="radio-item-info">
-                                Баланс: <strong>{{ payment.balance }} ₽</strong>
-                                {% if payment.is_default %} (Основной){% endif %}
-                                <span class="insufficient-funds" style="color: var(--text-color-secondary); display: none;"> (Недостаточно средств)</span>
-                            </div>
-                        </label>
-                    </div>
-                    {% endfor %}
-                </div>
-                <div style="text-align: center; margin: 16px 0; color: var(--text-color-secondary);">или</div>
-                {% endif %}
-
                 <div class="radio-item">
                     <input type="radio" name="payment_method" id="new_payment" value="card">
                     <label for="new_payment"><strong>Новая карта</strong></label>
                 </div>
 
-                <div id="new-card-form" style="margin-top: 16px; {% if saved_payments %}display: none;{% endif %}">
+                <div id="new-card-form" style="margin-top: 16px; display: none;">
                     <div class="form-group">
                         <label for="card_number">Номер карты *</label>
                         <input type="text" id="card_number" name="card_number" placeholder="1234 5678 9012 3456" maxlength="19" pattern="[0-9\s]+" {% if not saved_payments %}required{% endif %}>
@@ -126,28 +98,12 @@
         <div class="checkout-summary">
             <h2>Итого</h2>
 
-            <div class="cart-items-summary">
-                {% for item in cart.items.all %}
-                {% if item.course %}
-                <div class="cart-item-summary">
-                    {% if item.course.main_image_url %}
-                    <img src="{{ item.course.main_image_url }}" alt="{{ item.course.title }}" class="cart-item-image">
-                    {% else %}
-                    <div class="cart-item-image" style="display: flex; align-items: center; justify-content: center; color: var(--text-color-secondary); font-size: 10px;">Курс</div>
-                    {% endif %}
-                    <div class="cart-item-info">
-                        <div class="cart-item-name">{{ item.course.title }}</div>
-                        <div class="cart-item-details">Количество: {{ item.quantity }}</div>
-                    </div>
-                    <div class="cart-item-price">{{ item.subtotal }} ₽</div>
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
+            <div id="checkout-summary-loading" style="padding: 16px; color: var(--text-color-secondary);">Загрузка корзины...</div>
+            <div class="cart-items-summary" id="cart-items-summary" style="display: none;"></div>
 
             <div class="summary-item">
                 <span class="summary-item-label">Товары:</span>
-                <span class="summary-item-value" id="subtotal-value">{{ subtotal }} ₽</span>
+                <span class="summary-item-value" id="subtotal-value">0 ₽</span>
             </div>
             <div class="summary-item" id="discount-item" style="display: none;">
                 <span class="summary-item-label discount">Скидка:</span>
@@ -158,12 +114,12 @@
                 <span class="summary-item-value" id="delivery-value">Не требуется</span>
             </div>
             <div class="summary-item">
-                <span class="summary-item-label">НДС {{ vat_rate }}%:</span>
-                <span class="summary-item-value" id="vat-value">{{ vat_amount }} ₽</span>
+                <span class="summary-item-label">НДС <span id="vat-rate-label">20</span>%:</span>
+                <span class="summary-item-value" id="vat-value">0 ₽</span>
             </div>
             <div class="summary-item total">
                 <span class="summary-item-label">Итого:</span>
-                <span class="summary-item-value" id="total-value">{{ total_with_vat }} ₽</span>
+                <span class="summary-item-value" id="total-value">0 ₽</span>
             </div>
 
             <button type="submit" class="submit-button">Оформить заказ</button>
@@ -172,6 +128,68 @@
 </div>
 
 <script>
+(function loadCheckoutContext() {
+    var paymentLoading = document.getElementById('checkout-payment-loading');
+    var paymentDynamic = document.getElementById('checkout-payment-dynamic');
+    var summaryLoading = document.getElementById('checkout-summary-loading');
+    var cartItemsSummary = document.getElementById('cart-items-summary');
+    var totalPrice = 0;
+    fetch('/api/checkout-context/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data || !data.success) return;
+            totalPrice = parseFloat(data.subtotal || 0);
+            var userBalance = parseFloat(data.user_balance || 0);
+            var payments = data.payment_methods || [];
+            var cart = data.cart || {};
+            var items = (cart.items || []);
+            if (paymentLoading) paymentLoading.style.display = 'none';
+            var html = '';
+            if (userBalance > 0) {
+                var balanceDisabled = userBalance < totalPrice ? ' disabled' : '';
+                html += '<div class="radio-item" style="margin-bottom: 12px;"><input type="radio" name="payment_method" id="payment_balance" value="balance"' + balanceDisabled + '><label for="payment_balance"><div><strong>Личный счёт</strong></div><div class="radio-item-info">Баланс: <strong>' + userBalance + ' ₽</strong>' + (userBalance < totalPrice ? '<span style="color: var(--text-color-secondary);"> (Недостаточно средств)</span>' : '') + '</div></label></div><div style="text-align: center; margin: 16px 0; color: var(--text-color-secondary);">или</div>';
+            }
+            payments.forEach(function(p) {
+                var bal = parseFloat(p.balance || 0);
+                var mask = p.mask_card_number || ('**** ' + (p.card_number || '****'));
+                var cardType = (p.card_type || 'CARD').toUpperCase();
+                html += '<div class="radio-item" data-card-balance="' + bal + '" data-card-id="' + p.id + '"><input type="radio" name="payment_method" id="saved_payment_' + p.id + '" value="card" data-saved-id="' + p.id + '"><label for="saved_payment_' + p.id + '"><div><strong>' + cardType + ' ' + mask + '</strong></div><div class="radio-item-info">Баланс: <strong>' + bal + ' ₽</strong>' + (p.is_default ? ' (Основной)' : '') + '<span class="insufficient-funds" style="color: var(--text-color-secondary); display: none;"> (Недостаточно средств)</span></div></label></div>';
+            });
+            if (html) html += '<div style="text-align: center; margin: 16px 0; color: var(--text-color-secondary);">или</div>';
+            if (paymentDynamic) paymentDynamic.insertAdjacentHTML('beforeend', html);
+            var newCardForm = document.getElementById('new-card-form');
+            if (newCardForm) newCardForm.style.display = payments.length ? 'none' : 'block';
+            if (summaryLoading) summaryLoading.style.display = 'none';
+            if (cartItemsSummary) {
+                cartItemsSummary.style.display = 'block';
+                cartItemsSummary.innerHTML = '';
+                items.forEach(function(item) {
+                    var course = item.course || {};
+                    var title = course.title || item.course_title || 'Курс';
+                    var img = course.main_image_url || course.cover_image_path || item.course_cover_image || '';
+                    var qty = item.quantity || 1;
+                    var unitPrice = parseFloat(item.unit_price || 0);
+                    var subtotal = (unitPrice * qty).toFixed(0);
+                    var row = '<div class="cart-item-summary">' + (img ? '<img src="' + img + '" alt="" class="cart-item-image">' : '<div class="cart-item-image" style="display: flex; align-items: center; justify-content: center; color: var(--text-color-secondary); font-size: 10px;">Курс</div>') + '<div class="cart-item-info"><div class="cart-item-name">' + title.replace(/</g, '&lt;') + '</div><div class="cart-item-details">Количество: ' + qty + '</div></div><div class="cart-item-price">' + subtotal + ' ₽</div></div>';
+                    cartItemsSummary.insertAdjacentHTML('beforeend', row);
+                });
+            }
+            var subtotalEl = document.getElementById('subtotal-value');
+            var vatEl = document.getElementById('vat-value');
+            var totalEl = document.getElementById('total-value');
+            var vatRateLabel = document.getElementById('vat-rate-label');
+            if (subtotalEl) subtotalEl.textContent = (data.subtotal || '0') + ' ₽';
+            if (vatEl) vatEl.textContent = (data.vat_amount || '0') + ' ₽';
+            if (totalEl) totalEl.textContent = (data.total_with_vat || '0') + ' ₽';
+            if (vatRateLabel) vatRateLabel.textContent = data.vat_rate || '20';
+            if (typeof updateCardBalances === 'function') updateCardBalances();
+            if (typeof updateSubmitButton === 'function') updateSubmitButton();
+        })
+        .catch(function() {
+            if (paymentLoading) paymentLoading.textContent = 'Ошибка загрузки';
+            if (summaryLoading) summaryLoading.textContent = 'Ошибка загрузки корзины';
+        });
+})();
 // Глобальный обработчик ошибок для отладки
 window.addEventListener('error', function(e) {
     console.error('❌ Глобальная ошибка JavaScript:', {

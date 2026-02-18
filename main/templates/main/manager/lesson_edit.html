@@ -14,6 +14,36 @@
 .page-slot label { display: block; margin-top: 8px; font-weight: 600; font-size: 13px; }
 .page-slot input[type="text"], .page-slot select, .page-slot textarea { width: 100%; max-width: 500px; padding: 8px; margin-top: 4px; }
 .page-slot textarea { min-height: 80px; }
+
+/* Мини‑редактор для текста страницы */
+.rich-text-field {
+    margin-top: 4px;
+}
+
+.rich-text-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+
+.rich-text-toolbar button {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    cursor: pointer;
+}
+
+.rich-text-toolbar button:hover {
+    background: var(--surface);
+}
+
+.rich-text-toolbar button[data-action=\"bold\"] { font-weight: 700; }
+.rich-text-toolbar button[data-action=\"italic\"] { font-style: italic; }
+.rich-text-toolbar button[data-action=\"quote\"] { font-style: italic; }
 </style>
 {% endblock %}
 
@@ -66,7 +96,16 @@
                 </div>
                 <p style="font-size:12px;color:var(--text-color-secondary); margin-top:4px;">Одна страница: укажите только начальную. Диапазон: укажите начальную и конечную.</p>
                 <label>Текст страницы</label>
-                <textarea name="page_{{ forloop.counter0 }}_text" placeholder="Текст под медиа">{{ slot.text|default:'' }}</textarea>
+                <div class="rich-text-field">
+                    <div class="rich-text-toolbar">
+                        <button type="button" data-action="bold"><strong>B</strong></button>
+                        <button type="button" data-action="italic"><em>I</em></button>
+                        <button type="button" data-action="quote">“Цитата”</button>
+                        <button type="button" data-action="h2">Заголовок</button>
+                        <button type="button" data-action="img">Картинка</button>
+                    </div>
+                    <textarea name="page_{{ forloop.counter0 }}_text" class="rich-text-textarea" placeholder="Текст под медиа">{{ slot.text|default:'' }}</textarea>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -143,7 +182,16 @@
             '<input type="number" name="page_' + idx + '_page_number_end" value="" min="1" max="999" placeholder="Конец (пусто = одна)">' +
             '</div>' +
             '<label>Текст страницы</label>' +
-            '<textarea name="page_' + idx + '_text" placeholder="Текст под медиа"></textarea>';
+            '<div class="rich-text-field">' +
+            '  <div class="rich-text-toolbar">' +
+            '    <button type="button" data-action="bold"><strong>B</strong></button>' +
+            '    <button type="button" data-action="italic"><em>I</em></button>' +
+            '    <button type="button" data-action="quote">“Цитата”</button>' +
+            '    <button type="button" data-action="h2">Заголовок</button>' +
+            '    <button type="button" data-action="img">Картинка</button>' +
+            '  </div>' +
+            '  <textarea name="page_' + idx + '_text" class="rich-text-textarea" placeholder="Текст под медиа"></textarea>' +
+            '</div>';
         container.appendChild(slot);
         updateSlotVisibility(slot);
         setNextIndex(idx + 1);
@@ -152,6 +200,44 @@
     }
     addBtn.addEventListener('click', addPageSlot);
     if (getNextIndex() >= maxPages) addBtn.style.display = 'none';
+
+    // Мини-редактор: обработка кнопок форматирования
+    function wrapSelection(textarea, before, after) {
+        var start = textarea.selectionStart || 0;
+        var end = textarea.selectionEnd || 0;
+        var value = textarea.value || '';
+        var selected = value.substring(start, end);
+        textarea.value = value.substring(0, start) + before + selected + after + value.substring(end);
+        var cursor = start + before.length + selected.length + after.length;
+        textarea.focus();
+        textarea.setSelectionRange(cursor, cursor);
+    }
+
+    container.addEventListener('click', function(e) {
+        var btn = e.target.closest('.rich-text-toolbar button');
+        if (!btn) return;
+        e.preventDefault();
+        var action = btn.getAttribute('data-action');
+        var field = btn.closest('.rich-text-field');
+        if (!field) return;
+        var textarea = field.querySelector('.rich-text-textarea');
+        if (!textarea) return;
+
+        if (action === 'bold') {
+            wrapSelection(textarea, '<strong>', '</strong>');
+        } else if (action === 'italic') {
+            wrapSelection(textarea, '<em>', '</em>');
+        } else if (action === 'quote') {
+            wrapSelection(textarea, '<blockquote>', '</blockquote>');
+        } else if (action === 'h2') {
+            wrapSelection(textarea, '<h2>', '</h2>');
+        } else if (action === 'img') {
+            var url = window.prompt('Ссылка на картинку (URL)');
+            if (url) {
+                wrapSelection(textarea, '<img src=\"' + url + '\" alt=\"', '\">');
+            }
+        }
+    });
 })();
 </script>
 {% endblock %}

@@ -16,7 +16,8 @@ from .models import (
     Promotion, PromoUsage, SupportTicket, ActivityLog,
     SavedPaymentMethod, CardTransaction, BalanceTransaction, Receipt, ReceiptItem,
     OrganizationAccount, OrganizationTransaction, UserSettings,
-    CourseCategory, Course, CourseFavorite, CoursePurchase, CourseReview,
+    CourseCategory, Course, CourseFavorite, CoursePurchase, CourseReview, CourseRefundRequest,
+    UserNotification,
 )
 from .serializers import (
     RoleSerializer, UserProfileSerializer, UserAddressSerializer,
@@ -561,12 +562,21 @@ class ProfileAPIView(APIView):
         """Получить профиль текущего пользователя"""
         try:
             profile = request.user.profile
-            serializer = UserProfileSerializer(profile)
-            return Response(serializer.data)
         except UserProfile.DoesNotExist:
             profile = UserProfile.objects.create(user=request.user)
-            serializer = UserProfileSerializer(profile)
-            return Response(serializer.data)
+        serializer = UserProfileSerializer(profile)
+        data = dict(serializer.data)
+        data['full_name'] = getattr(profile, 'full_name', None) or (
+            f'{request.user.first_name or ""} {request.user.last_name or ""}'.strip() or request.user.username
+        )
+        data['email'] = getattr(request.user, 'email', '')
+        role_name = ''
+        if profile.role and getattr(profile.role, 'role_name', None):
+            role_name = profile.role.role_name.strip().lower()
+        data['show_admin_panel'] = request.user.is_superuser or role_name == 'admin'
+        # Панель менеджера только для роли «менеджер», не для админа
+        data['show_manager_panel'] = role_name in ('manager', 'менеджер') and not (request.user.is_superuser or role_name == 'admin')
+        return Response(data)
 
     def put(self, request):
         """Обновить профиль"""
@@ -2662,6 +2672,215 @@ class FavoriteDetailAPIView(APIView):
         fav = get_object_or_404(CourseFavorite, user=request.user, course_id=product_id)
         fav.delete()
         return Response({'success': True, 'message': 'Курс удалён из избранного'}, status=status.HTTP_204_NO_CONTENT)
+
+
+# ===== API «Мои курсы» =====
+@method_decorator(csrf_exempt, name='dispatch')
+class MyCoursesAPIView(APIView):
+    """Список покупок курсов пользователя: actual, refund_pending, archived"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        purchases = (
+            CoursePurchase.objects.filter(user=request.user, status='paid')
+            .select_related('course', 'course__category')
+            .prefetch_related('course__images')
+            .order_by('-paid_at')
+        )
+        pending_refund_ids = set(
+            CourseRefundRequest.objects.filter(
+                course_purchase__user=request.user, status='pending'
+            ).values_list('course_purchase_id', flat=True)
+        )
+        def serialize(p):
+            c = p.course
+            return {
+                'id': p.id,
+                'purchased_at': p.paid_at.isoformat() if p.paid_at else None,
+                'completed_at': p.completed_at.isoformat() if p.completed_at else None,
+                'course': {
+                    'id': c.id,
+                    'title': c.title,
+                    'cover_image_path': getattr(c, 'cover_image_path', None) or getattr(c, 'main_image_url', None) or '',
+                },
+            }
+        actual = [serialize(p) for p in purchases if p.completed_at is None and p.id not in pending_refund_ids]
+        refund_pending = [serialize(p) for p in purchases if p.completed_at is None and p.id in pending_refund_ids]
+        archived = [serialize(p) for p in purchases if p.completed_at is not None]
+        return Response({
+            'success': True,
+            'actual': actual,
+            'refund_pending': refund_pending,
+            'archived': archived,
+        })
+
+
+# ===== API чеков пользователя =====
+@method_decorator(csrf_exempt, name='dispatch')
+class ReceiptsListAPIView(APIView):
+    """Список чеков текущего пользователя"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        receipts = Receipt.objects.filter(user=request.user).select_related('order').order_by('-created_at')
+        data = ReceiptSerializer(receipts, many=True).data
+        return Response({'success': True, 'receipts': data})
+
+
+# ===== API заявок на возврат (курсы) =====
+@method_decorator(csrf_exempt, name='dispatch')
+class RefundRequestsListAPIView(APIView):
+    """Список заявок на возврат курсов текущего пользователя"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        refunds = (
+            CourseRefundRequest.objects.filter(user=request.user)
+            .select_related('course_purchase', 'course_purchase__course')
+            .order_by('-created_at')
+        )
+        data = []
+        for r in refunds:
+            data.append({
+                'id': r.id,
+                'refund_number': getattr(r, 'refund_number', f'REF-{r.id:05d}'),
+                'status': r.status,
+                'amount': str(r.amount),
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'course_title': r.course_purchase.course.title if r.course_purchase_id else '',
+                'purchase_id': r.course_purchase_id,
+            })
+        return Response({'success': True, 'refund_requests': data})
+
+
+# ===== API контекста оформления заказа =====
+@method_decorator(csrf_exempt, name='dispatch')
+class CheckoutContextAPIView(APIView):
+    """Данные для страницы оформления заказа: корзина, баланс, адреса, способы оплаты, итоги."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        cart_data = CartSerializer(cart).data
+        if isinstance(cart_data, dict) and 'items' in cart_data:
+            total = sum(
+                (Decimal(str(i.get('unit_price', 0))) * int(i.get('quantity', 0)) for i in cart_data['items']),
+                Decimal('0.00')
+            )
+            cart_data['total_price'] = str(total.quantize(Decimal('0.01')))
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        try:
+            user_balance = Decimal(str(profile.balance)) if profile.balance else Decimal('0.00')
+        except (ValueError, TypeError, InvalidOperation):
+            user_balance = Decimal('0.00')
+        addresses = UserAddress.objects.filter(user=request.user)
+        saved_payments = SavedPaymentMethod.objects.filter(user=request.user)
+        payment_methods_data = []
+        for card in saved_payments:
+            item = SavedPaymentMethodSerializer(card).data
+            if isinstance(item, dict):
+                item['mask_card_number'] = card.mask_card_number()
+            payment_methods_data.append(item)
+        cart_total = Decimal(str(cart_data.get('total_price', 0)))
+        delivery_cost = Decimal('0.00')
+        vat_rate = Decimal('20.00')
+        vat_amount = (cart_total * vat_rate / Decimal('100')).quantize(Decimal('0.01'))
+        total_with_vat = cart_total + vat_amount
+        return Response({
+            'success': True,
+            'cart': cart_data,
+            'user_balance': str(user_balance),
+            'addresses': UserAddressSerializer(addresses, many=True).data,
+            'payment_methods': payment_methods_data,
+            'subtotal': str(cart_total),
+            'delivery_cost': str(delivery_cost),
+            'vat_rate': str(vat_rate),
+            'vat_amount': str(vat_amount),
+            'total_with_vat': str(total_with_vat),
+            'courses_only': True,
+        })
+
+
+# ===== API уведомлений профиля =====
+@method_decorator(csrf_exempt, name='dispatch')
+class NotificationsAPIView(APIView):
+    """Уведомления пользователя: из БД + заказы, возвраты, промо."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        notifications = []
+        try:
+            for n in UserNotification.objects.filter(user=request.user).order_by('-created_at')[:15]:
+                notifications.append({'id': f'notif-{n.id}', 'type': 'admin_comment', 'text': n.message, 'url': ''})
+            status_label = {
+                'processing': 'В обработке', 'paid': 'Оплачен', 'shipped': 'Отправлен',
+                'delivered': 'Доставлен', 'cancelled': 'Отменен',
+            }
+            for o in Order.objects.filter(user=request.user).order_by('-created_at')[:10]:
+                label = status_label.get(o.order_status, o.order_status)
+                notifications.append({
+                    'id': f'order-status-{o.id}',
+                    'type': 'order',
+                    'text': f'Статус вашего заказа #{o.id} изменился: {label}',
+                    'url': f'/profile/orders/{o.id}/',
+                })
+            for r in BalanceTransaction.objects.filter(user=request.user, transaction_type='order_refund').order_by('-created_at')[:5]:
+                order_id = getattr(r, 'order_id', None) or (r.order.id if getattr(r, 'order', None) else '')
+                notifications.append({
+                    'id': f'refund-{r.id}',
+                    'type': 'refund',
+                    'text': f'Вам возвращены деньги {r.amount} ₽ за заказ #{order_id}',
+                    'url': '',
+                })
+            today = timezone.now().date()
+            for p in Promotion.objects.filter(is_active=True).order_by('-start_date')[:5]:
+                if not p.start_date or (today - p.start_date).days <= 30:
+                    notifications.append({
+                        'id': f'promo-{p.id}',
+                        'type': 'promo',
+                        'text': f'Новый промокод: {p.promo_code} — скидка {p.discount}%',
+                        'url': '',
+                    })
+        except Exception:
+            pass
+        return Response({'success': True, 'notifications': notifications[:20]})
+
+
+# ===== API статических страниц (контакты, о нас, доставка и т.д.) =====
+STATIC_PAGES = {
+    'contacts': {'title': 'Контакты', 'content': '<p>Свяжитесь с нами по email или через форму обратной связи.</p>'},
+    'about': {'title': 'О нас', 'content': '<p>MPTCOURSE — платформа онлайн-курсов для студентов.</p>'},
+    'delivery': {'title': 'Доставка', 'content': '<p>Курсы доступны в личном кабинете сразу после оплаты. Доставка не требуется.</p>'},
+    'refund': {'title': 'Возврат', 'content': '<p>Условия возврата средств описаны в разделе «Заявления на возврат» в профиле.</p>'},
+    'bonus': {'title': 'Бонусы', 'content': '<p>Информация о бонусной программе и накоплении баллов.</p>'},
+    'brand_book': {'title': 'Брендбук', 'content': '<p>Рекомендации по использованию фирменного стиля MPTCOURSE.</p>'},
+}
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class StaticPagesListAPIView(APIView):
+    """Список slug статических страниц."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({'success': True, 'pages': list(STATIC_PAGES.keys())})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class StaticPageDetailAPIView(APIView):
+    """Контент статической страницы по slug."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, slug):
+        if slug not in STATIC_PAGES:
+            return Response({'success': False, 'error': 'Страница не найдена'}, status=status.HTTP_404_NOT_FOUND)
+        page = STATIC_PAGES[slug]
+        return Response({
+            'success': True,
+            'slug': slug,
+            'title': page['title'],
+            'content': page['content'],
+        })
 
 
 # ===== API управления курсами (менеджер/админ) =====

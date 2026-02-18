@@ -1,20 +1,182 @@
 /* =================== СТИЛИ ДЛЯ ПРОФИЛЯ =================== */
 
 .profile-content {
-    display: flex;
-    justify-content: center;
-    padding: 60px 20px;
+    width: 100%;
+    min-height: 60vh;
+    padding: 48px 32px 80px;
+    box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+    .profile-content {
+        padding: 56px 40px 96px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .profile-content {
+        padding: 64px 48px 120px;
+    }
 }
 
 .profile-container {
     width: 100%;
-    max-width: 480px;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    font-family: var(--font-sans);
+}
+
+@media (min-width: 768px) {
+    .profile-container {
+        grid-template-columns: 380px 1fr;
+        gap: 40px;
+        align-items: start;
+    }
+}
+
+@media (min-width: 1024px) {
+    .profile-container {
+        grid-template-columns: 420px 1fr;
+        gap: 48px;
+    }
+}
+
+/* Левая колонка: контактная информация + блок «Курсы» */
+.profile-left {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+@media (min-width: 768px) {
+    .profile-left {
+        gap: 32px;
+    }
+}
+
+/* Правая колонка: два блока «Баланс и платежи» и «Аккаунт» */
+.profile-right {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+@media (min-width: 768px) {
+    .profile-right {
+        gap: 32px;
+    }
+}
+
+/* Блок с данными профиля */
+.profile-block-card {
     background-color: var(--bg-color);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    padding: 40px 30px;
-    text-align: center;
-    font-family: 'Inter', 'Roboto', sans-serif;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.08);
+    padding: 40px 36px;
+    border: 1px solid var(--border-color);
+    position: relative;
+}
+
+.profile-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.profile-block-title {
+    margin: 0 0 24px 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: var(--text-color);
+}
+
+.profile-edit-fab {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    background: var(--bg-color);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.15s ease;
+}
+
+.profile-edit-fab:hover {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+}
+
+.profile-edit-fab:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.profile-edit-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* Блок навигации по разделам */
+.profile-nav-block {
+    background-color: var(--bg-color);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.08);
+    padding: 40px 36px;
+    border: 1px solid var(--border-color);
+}
+
+.profile-nav-title {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-color-secondary);
+    text-transform: uppercase;
+}
+
+.profile-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+@media (min-width: 600px) {
+    .profile-buttons {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+}
+
+@media (min-width: 900px) {
+    .profile-buttons {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+    }
+}
+
+.profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.profile-action-form {
+    margin: 0;
 }
 
 /* Уведомления в профиле (левый нижний угол) */
@@ -118,36 +280,42 @@
     opacity: 0.7;
 }
 
-/* Заголовок */
-.profile-container h2 {
-    margin-bottom: 30px;
-    font-size: 26px;
-    font-weight: 700;
-}
-
 /* Информация о пользователе */
 .profile-info {
-    margin-bottom: 32px;
-    font-size: 16px;
-    line-height: 1.6;
-    color: var(--text-color-secondary);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-color);
 }
 
 .profile-info p {
-    margin: 6px 0;
-}
-
-/* Кнопки */
-.buttons {
+    margin: 0;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
 }
 
-.btn {
+.profile-info p:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.profile-info p strong {
+    min-width: 140px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Кнопки в профиле */
+.profile-content .btn {
     width: 100%;
-    padding: 10px 0;
-    border-radius: 6px;
+    padding: 16px 20px;
+    border-radius: 12px;
     font-weight: 600;
     font-size: 15px;
     border: 1px solid;
@@ -155,7 +323,17 @@
     text-align: center;
     text-decoration: none;
     display: block;
-    transition: all 0.2s ease;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    box-sizing: border-box;
+}
+
+.profile-content .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.profile-content .btn:active {
+    transform: translateY(0);
 }
 
 /* Светлая тема: чёрные кнопки с белым текстом */
@@ -177,33 +355,59 @@ body.dark .btn {
     filter: brightness(90%);
 }
 
-/* Кнопка удаления */
-.btn.danger {
-    border-color: var(--text-color);
+/* Кнопки в блоке действий (Выйти / Удалить аккаунт) — одинаковый контурный стиль */
+.profile-content .profile-actions .btn {
+    background-color: var(--bg-color);
     color: var(--text-color);
+    border-color: var(--text-color);
 }
 
-.btn.danger:hover {
-    background-color: var(--btn-bg);
-    color: var(--btn-text);
+.profile-content .profile-actions .btn:hover {
+    background-color: var(--text-color);
+    color: var(--bg-color);
 }
 
 /* Адаптив для мобильных */
 @media (max-width: 768px) {
     .profile-content {
-        padding: 50px 15px;
+        padding: 32px 20px 64px;
     }
     
     .profile-container {
-        padding: 30px 20px;
+        gap: 24px;
     }
     
-    .profile-container h2 {
+    .profile-block-card,
+    .profile-nav-block {
+        padding: 28px 24px;
+        border-radius: 14px;
+    }
+    
+    .profile-block-title {
         font-size: 22px;
+        margin-bottom: 24px;
     }
     
-    .profile-info {
-        font-size: 15px;
+    .profile-nav-title {
+        margin-bottom: 22px;
+    }
+    
+    .profile-info p {
+        padding: 12px 0;
+    }
+    
+    .profile-info p strong {
+        min-width: 120px;
+    }
+    
+    .profile-buttons {
+        gap: 14px;
+    }
+    
+    .profile-actions {
+        margin-top: 26px;
+        padding-top: 24px;
+        gap: 14px;
     }
     
     .profile-notifications {
@@ -223,31 +427,52 @@ body.dark .btn {
 
 @media (max-width: 480px) {
     .profile-content {
-        padding: 40px 10px;
+        padding: 24px 16px 48px;
     }
     
-    .profile-container {
-        padding: 24px 16px;
-        border-radius: 8px;
+    .profile-block-card,
+    .profile-nav-block {
+        padding: 24px 20px;
+        border-radius: 12px;
     }
     
-    .profile-container h2 {
+    .profile-block-title {
         font-size: 20px;
         margin-bottom: 20px;
     }
     
+    .profile-nav-title {
+        font-size: 14px;
+        margin-bottom: 18px;
+    }
+    
     .profile-info {
         font-size: 14px;
-        margin-bottom: 24px;
     }
     
-    .buttons {
-        gap: 10px;
+    .profile-info p {
+        padding: 10px 0;
     }
     
-    .btn {
-        padding: 12px 0;
+    .profile-info p strong {
+        min-width: 100%;
+        font-size: 12px;
+    }
+    
+    .profile-content .btn {
+        padding: 14px 16px;
         font-size: 14px;
+        border-radius: 10px;
+    }
+    
+    .profile-buttons {
+        gap: 12px;
+    }
+    
+    .profile-actions {
+        margin-top: 22px;
+        padding-top: 20px;
+        gap: 12px;
     }
     
     .profile-notifications {

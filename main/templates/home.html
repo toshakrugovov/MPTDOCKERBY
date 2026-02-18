@@ -50,73 +50,59 @@
     </div>
 </section>
 
-<!-- New Products (курсы) -->
-{% if new_products %}
-<section class="products-section">
+<!-- Курсы: загрузка через API -->
+<section class="products-section" id="home-courses-section">
     <div class="container">
-        <h2 class="section-title">Новинки</h2>
-        <div class="products-grid">
-            {% for product in new_products %}
-            <a href="{% url 'catalog' %}" class="product-card" style="text-decoration: none; color: inherit;">
-                <div class="product-image">
-                    {% if product.main_image_url %}
-                        <img src="{{ product.main_image_url }}" alt="{{ product.title }}">
-                    {% else %}
-                        Курс
-                    {% endif %}
-                </div>
-                <div class="product-info">
-                    <h3 class="product-name">{{ product.title }}</h3>
-                    <div class="product-price">
-                        {% if product.discount and product.discount > 0 %}
-                            <span class="product-old-price">{{ product.price }} ₽</span>
-                            {{ product.final_price|floatformat:0 }} ₽
-                            <span class="product-discount">-{{ product.discount }}%</span>
-                        {% else %}
-                            {{ product.price }} ₽
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
+        <h2 class="section-title">Рекомендуемые курсы</h2>
+        <div id="home-courses-loading" class="catalog-loading">Загрузка...</div>
+        <div id="home-products-grid" class="products-grid" style="display: none;"></div>
+        <p id="home-courses-empty" class="catalog-empty" style="display: none;">Курсы не найдены.</p>
+        <p style="text-align: center; margin-top: 1rem;">
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Смотреть весь каталог</a>
+        </p>
     </div>
 </section>
-{% endif %}
 
-<!-- Popular Products (курсы) -->
-{% if popular_products %}
-<section class="products-section">
-    <div class="container">
-        <h2 class="section-title">Популярные курсы</h2>
-        <div class="products-grid">
-            {% for product in popular_products %}
-            <a href="{% url 'catalog' %}" class="product-card" style="text-decoration: none; color: inherit;">
-                <div class="product-image">
-                    {% if product.main_image_url %}
-                        <img src="{{ product.main_image_url }}" alt="{{ product.title }}">
-                    {% else %}
-                        Курс
-                    {% endif %}
-                </div>
-                <div class="product-info">
-                    <h3 class="product-name">{{ product.title }}</h3>
-                    <div class="product-price">
-                        {% if product.discount and product.discount > 0 %}
-                            <span class="product-old-price">{{ product.price }} ₽</span>
-                            {{ product.final_price|floatformat:0 }} ₽
-                            <span class="product-discount">-{{ product.discount }}%</span>
-                        {% else %}
-                            {{ product.price }} ₽
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-{% endif %}
-
+<script>
+(function() {
+    fetch('/api/catalog/?per_page=12', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var loading = document.getElementById('home-courses-loading');
+            var grid = document.getElementById('home-products-grid');
+            var empty = document.getElementById('home-courses-empty');
+            if (!loading || !grid) return;
+            loading.style.display = 'none';
+            var list = (data && data.products) ? data.products : [];
+            if (list.length === 0) {
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+            grid.style.display = 'grid';
+            grid.innerHTML = '';
+            var catalogUrl = "{% url 'catalog' %}";
+            list.forEach(function(p) {
+                var img = p.main_image_url || p.cover_image_path || '';
+                var priceHtml = (p.discount && parseFloat(p.discount) > 0)
+                    ? '<span class="product-old-price">' + (p.price || '') + ' ₽</span> ' + (p.final_price || p.price) + ' ₽ <span class="product-discount">-' + p.discount + '%</span>'
+                    : (p.price || '') + ' ₽';
+                var title = (p.title || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                var card = document.createElement('a');
+                card.href = catalogUrl;
+                card.className = 'product-card';
+                card.style.textDecoration = 'none';
+                card.style.color = 'inherit';
+                card.innerHTML = '<div class="product-image">' + (img ? '<img src="' + img + '" alt="' + title + '">' : 'Курс') + '</div>' +
+                    '<div class="product-info"><h3 class="product-name">' + title + '</h3><div class="product-price">' + priceHtml + '</div></div>';
+                grid.appendChild(card);
+            });
+        })
+        .catch(function() {
+            var loading = document.getElementById('home-courses-loading');
+            if (loading) loading.textContent = 'Ошибка загрузки';
+        });
+})();
+</script>
 
 {% endblock %}

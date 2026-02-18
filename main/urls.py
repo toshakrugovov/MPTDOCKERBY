@@ -17,7 +17,10 @@ from .api import (
     PromotionManagementDetailAPIView,
     RoleManagementAPIView, RoleManagementDetailAPIView, BackupManagementAPIView,
     BackupManagementDetailAPIView, UserSettingsAPIView,
-    CourseReviewAPIView
+    CourseReviewAPIView,
+    MyCoursesAPIView, ReceiptsListAPIView, RefundRequestsListAPIView,
+    CheckoutContextAPIView, NotificationsAPIView,
+    StaticPagesListAPIView, StaticPageDetailAPIView,
 )
 from django.contrib.auth import views as auth_views
 from . import views
@@ -49,6 +52,7 @@ urlpatterns = [
     path('favorites/', views.favorites, name='favorites'), 
     path('about/', views.about, name='about'), 
     path('catalog/', views.catalog, name='catalog'),
+    path('catalog/<path:extra>/', views.catalog_redirect, name='catalog_redirect'),
     
     # Профиль пользователя
     path('profile/', views.profile_view, name='profile'),
@@ -137,7 +141,14 @@ urlpatterns = [
     # API для избранного
     path('api/favorites/', FavoritesAPIView.as_view(), name='api-favorites'),
     path('api/favorites/<int:product_id>/', FavoriteDetailAPIView.as_view(), name='api-favorite-detail'),
-    
+    # API мои курсы, чеки, заявки на возврат
+    path('api/my-courses/', MyCoursesAPIView.as_view(), name='api-my-courses'),
+    path('api/receipts/', ReceiptsListAPIView.as_view(), name='api-receipts-list'),
+    path('api/refund-requests/', RefundRequestsListAPIView.as_view(), name='api-refund-requests-list'),
+    path('api/checkout-context/', CheckoutContextAPIView.as_view(), name='api-checkout-context'),
+    path('api/notifications/', NotificationsAPIView.as_view(), name='api-notifications'),
+    path('api/pages/', StaticPagesListAPIView.as_view(), name='api-pages-list'),
+    path('api/pages/<str:slug>/', StaticPageDetailAPIView.as_view(), name='api-page-detail'),
     # API для отзывов
     path('api/courses/<int:course_id>/reviews/', CourseReviewAPIView.as_view(), name='api-course-reviews'),
 

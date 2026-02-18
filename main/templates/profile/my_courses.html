@@ -7,115 +7,112 @@
 <link rel="stylesheet" href="{% static 'css/home.css' %}">
 <link rel="stylesheet" href="{% static 'css/profile.css' %}">
 <link rel="stylesheet" href="{% static 'css/catalog.css' %}">
-<style>
-  .products-grid .product-card .btn-course-open {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    text-align: center !important;
-    width: 100%;
-    box-sizing: border-box;
-    transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
-    animation: btn-course-appear 0.4s ease forwards;
-  }
-  .products-grid .product-card .btn-course-open:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px var(--elev, rgba(0,0,0,0.15));
-    opacity: 0.95;
-  }
-  .products-grid .product-card .btn-course-open:active {
-    transform: translateY(0);
-  }
-  @keyframes btn-course-appear {
-    from { opacity: 0.85; transform: scale(0.98); }
-    to { opacity: 1; transform: scale(1); }
-  }
-</style>
+<link rel="stylesheet" href="{% static 'css/my_courses.css' %}">
 {% endblock %}
 
 {% block content %}
 <div class="profile-content">
-    <div class="orders-content" style="max-width: 100%;">
-        <div class="orders-header" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;">
-            <a href="{% url 'profile' %}">← В профиль</a>
-            <h1 style="margin: 0;">Мои курсы</h1>
+    <div class="my-courses-page">
+        <header class="my-courses-header">
+            <a href="{% url 'profile' %}" class="my-courses-back">← В профиль</a>
+            <h1 class="my-courses-title">Мои курсы</h1>
+        </header>
+
+        <div id="my-courses-loading" class="my-courses-loading">Загрузка курсов...</div>
+
+        <div id="my-courses-content" style="display: none;">
+            <section class="my-courses-section actual">
+                <div class="my-courses-section-card">
+                    <h2 class="my-courses-section-title"><span class="section-dot"></span>Актуальные</h2>
+                    <div class="products-grid" id="my-courses-actual"></div>
+                    <div class="my-courses-empty" id="actual-empty" style="display: none;">
+                        <div class="my-courses-empty-icon">📚</div>
+                        <p class="my-courses-empty-text">Нет актуальных курсов</p>
+                        <p class="my-courses-empty-hint">Купите курс в каталоге, чтобы начать обучение.</p>
+                        <a href="{% url 'catalog' %}">Перейти в каталог</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="my-courses-section refund" id="refund-pending-section">
+                <div class="my-courses-section-card">
+                    <h2 class="my-courses-section-title"><span class="section-dot"></span>На рассмотрении возврата</h2>
+                    <p class="my-courses-section-desc">Заявление на возврат по этим курсам уже подано. Курсы будут недоступны до решения.</p>
+                    <div class="products-grid" id="my-courses-refund-pending"></div>
+                </div>
+            </section>
+
+            <section class="my-courses-section archived">
+                <div class="my-courses-section-card">
+                    <h2 class="my-courses-section-title"><span class="section-dot"></span>Архивные</h2>
+                    <div class="products-grid" id="my-courses-archived"></div>
+                    <div class="my-courses-empty" id="archived-empty" style="display: none;">
+                        <div class="my-courses-empty-icon">✓</div>
+                        <p class="my-courses-empty-text">Нет завершённых курсов</p>
+                        <p class="my-courses-empty-hint">Завершённые курсы появятся здесь.</p>
+                    </div>
+                </div>
+            </section>
         </div>
-
-        <section class="courses-section" style="margin-bottom: 32px;">
-            <h2 class="section-title" style="font-size: 20px; margin-bottom: 16px;">Актуальные</h2>
-            {% if actual %}
-            <div class="products-grid">
-                {% for purchase in actual %}
-                <div class="product-card" style="display: flex; flex-direction: column;">
-                    <a href="{% url 'course_view' purchase_id=purchase.id %}" style="text-decoration: none; color: inherit; flex: 1; display: flex; flex-direction: column;">
-                        <div class="product-image">
-                            {% if purchase.course.main_image_url %}
-                            <img src="{{ purchase.course.main_image_url }}" alt="{{ purchase.course.title }}">
-                            {% else %}
-                            <div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>
-                            {% endif %}
-                        </div>
-                        <div class="product-info">
-                            <h3 class="product-name">{{ purchase.course.title }}</h3>
-                        </div>
-                    </a>
-                    <a href="{% url 'course_view' purchase_id=purchase.id %}" class="btn btn-primary btn-course-open" style="margin-top: 12px;">Открыть курс</a>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="empty-state">Нет актуальных курсов. <a href="{% url 'catalog' %}">Перейти в каталог</a></p>
-            {% endif %}
-        </section>
-
-        {% if refund_pending %}
-        <section class="courses-section" style="margin-bottom: 32px;">
-            <h2 class="section-title" style="font-size: 20px; margin-bottom: 16px;">На рассмотрении возврата</h2>
-            <p class="empty-state" style="margin-bottom: 12px;">Заявление на возврат по этим курсам уже подано и находится на рассмотрении. Доступ к курсу закрыт до рассмотрения заявления.</p>
-            <div class="products-grid">
-                {% for purchase in refund_pending %}
-                <div class="product-card" style="opacity: 0.85; cursor: default; pointer-events: none;">
-                    <div class="product-image">
-                        {% if purchase.course.main_image_url %}
-                        <img src="{{ purchase.course.main_image_url }}" alt="{{ purchase.course.title }}">
-                        {% else %}
-                        <div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>
-                        {% endif %}
-                    </div>
-                    <div class="product-info">
-                        <h3 class="product-name">{{ purchase.course.title }}</h3>
-                        <div class="product-price">Возврат на рассмотрении • Курс недоступен</div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
-        {% endif %}
-
-        <section class="courses-section">
-            <h2 class="section-title" style="font-size: 20px; margin-bottom: 16px;">Архивные</h2>
-            {% if archived %}
-            <div class="products-grid">
-                {% for purchase in archived %}
-                <a href="{% url 'course_view' purchase_id=purchase.id %}" class="product-card" style="text-decoration: none; color: inherit;">
-                    <div class="product-image">
-                        {% if purchase.course.main_image_url %}
-                        <img src="{{ purchase.course.main_image_url }}" alt="{{ purchase.course.title }}">
-                        {% else %}
-                        <div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>
-                        {% endif %}
-                    </div>
-                    <div class="product-info">
-                        <h3 class="product-name">{{ purchase.course.title }}</h3>
-                        <div class="product-price">Завершён {{ purchase.completed_at|date:"d.m.Y" }}</div>
-                    </div>
-                </a>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="empty-state">Нет архивных курсов.</p>
-            {% endif %}
-        </section>
     </div>
 </div>
+<script>
+(function() {
+    var loading = document.getElementById('my-courses-loading');
+    var content = document.getElementById('my-courses-content');
+    var baseUrl = "{% url 'profile' %}".replace(/\/$/, '') + '/my-courses/';
+    var catalogUrl = "{% url 'catalog' %}";
+    fetch('/api/my-courses/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!loading || !content) return;
+            loading.style.display = 'none';
+            content.style.display = 'block';
+            function renderCard(p, opts) {
+                var img = (p.course && p.course.cover_image_path) || '';
+                var title = (p.course && p.course.title) || 'Курс';
+                var url = baseUrl + p.id + '/';
+                if (opts && opts.refundPending) {
+                    return '<div class="product-card" style="opacity: 0.85; cursor: default; pointer-events: none;">' +
+                        '<div class="product-image">' + (img ? '<img src="' + img + '" alt="' + title.replace(/"/g, '&quot;') + '">' : '<div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>') + '</div>' +
+                        '<div class="product-info"><h3 class="product-name">' + title.replace(/</g, '&lt;') + '</h3><div class="product-price">Возврат на рассмотрении • Курс недоступен</div></div></div>';
+                }
+                if (opts && opts.archived) {
+                    var completed = p.completed_at ? new Date(p.completed_at).toLocaleDateString('ru-RU') : '';
+                    return '<a href="' + url + '" class="product-card" style="text-decoration: none; color: inherit;">' +
+                        '<div class="product-image">' + (img ? '<img src="' + img + '" alt="' + title.replace(/"/g, '&quot;') + '">' : '<div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>') + '</div>' +
+                        '<div class="product-info"><h3 class="product-name">' + title.replace(/</g, '&lt;') + '</h3><div class="product-price">Завершён ' + completed + '</div></div></a>';
+                }
+                return '<div class="product-card" style="display: flex; flex-direction: column;">' +
+                    '<a href="' + url + '" style="text-decoration: none; color: inherit; flex: 1; display: flex; flex-direction: column;">' +
+                    '<div class="product-image">' + (img ? '<img src="' + img + '" alt="' + title.replace(/"/g, '&quot;') + '">' : '<div style="padding: 40px; background: var(--border-color); color: var(--text-color-secondary);">Курс</div>') + '</div>' +
+                    '<div class="product-info"><h3 class="product-name">' + title.replace(/</g, '&lt;') + '</h3></div></a>' +
+                    '<a href="' + url + '" class="btn btn-primary btn-course-open" style="margin-top: 12px;">Открыть курс</a></div>';
+            }
+            var actual = (data.actual || []);
+            var refundPending = (data.refund_pending || []);
+            var archived = (data.archived || []);
+            var actualEl = document.getElementById('my-courses-actual');
+            var actualEmpty = document.getElementById('actual-empty');
+            if (actualEl) {
+                if (actual.length === 0) { actualEmpty.style.display = 'block'; }
+                else { actual.forEach(function(p) { actualEl.insertAdjacentHTML('beforeend', renderCard(p)); }); }
+            }
+            var refundSection = document.getElementById('refund-pending-section');
+            if (refundSection) refundSection.style.display = refundPending.length ? 'block' : 'none';
+            var refundEl = document.getElementById('my-courses-refund-pending');
+            if (refundEl) refundPending.forEach(function(p) { refundEl.insertAdjacentHTML('beforeend', renderCard(p, { refundPending: true })); });
+            var archivedEl = document.getElementById('my-courses-archived');
+            var archivedEmpty = document.getElementById('archived-empty');
+            if (archivedEl) {
+                if (archived.length === 0) { if (archivedEmpty) archivedEmpty.style.display = 'block'; }
+                else { archived.forEach(function(p) { archivedEl.insertAdjacentHTML('beforeend', renderCard(p, { archived: true })); }); }
+            }
+        })
+        .catch(function() {
+            if (loading) loading.textContent = 'Ошибка загрузки';
+            if (content) content.style.display = 'block';
+        });
+})();
+</script>
 {% endblock %}

@@ -22,6 +22,8 @@ schema_view = get_schema_view(
 urlpatterns = [
     # favicon, чтобы не падать на кастомном handler404/500
     path('favicon.ico', views.favicon_view, name='favicon'),
+    # Тестовая страница 500 для отрисовки шаблона ошибки
+    path('debug-500/', views.handler500, name='debug_500'),
     # Кастомные админские пути (должны быть ПЕРЕД admin.site.urls)
     path('admin/users/', views.admin_users_list, name='admin_users_list'),
     path('admin/users/create/', views.admin_user_create, name='admin_user_create'),

@@ -2,7 +2,7 @@
 
 /* --- Сброс и базовые стили --- */
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Inter', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body { font-family: var(--font-sans); background:var(--bg); color:var(--text); min-height:100vh; }
 .page-wrapper { min-height:100vh; display:flex; flex-direction:column; padding-top:64px; }
 
 /* --- Login form --- */

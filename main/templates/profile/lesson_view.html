@@ -67,7 +67,7 @@
                     {% endif %}
                 </div>
                 {% if page.text %}
-                <div class="lesson-page-text">{{ page.text }}</div>
+                <div class="lesson-page-text">{{ page.text|safe }}</div>
                 {% endif %}
             </div>
             {% endfor %}

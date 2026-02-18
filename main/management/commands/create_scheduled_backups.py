@@ -102,13 +102,12 @@ class Command(BaseCommand):
             import sqlite3
             
             try:
-                # Подключаемся к БД и выполняем VACUUM INTO
-                # Это создаст полный бэкап со всеми данными, включая данные из WAL
+                backup_path_sql = backup_path.replace('\\', '/')
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
-                
-                # Выполняем VACUUM INTO для создания полного бэкапа
-                cursor.execute(f"VACUUM INTO '{backup_path}'")
+                cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.commit()
+                cursor.execute(f"VACUUM INTO '{backup_path_sql}'")
                 conn.commit()
                 conn.close()
                 
@@ -181,6 +180,7 @@ class Command(BaseCommand):
                     'receipt', 'receiptitem', 'promotion', 'promo_usage',
                     'savedpaymentmethod', 'cardtransaction', 'balancetransaction', 'supportticket',
                     'activitylog', 'receiptconfig', 'organizationaccount', 'organizationtransaction',
+                    'databasebackup',
                 ]
                 missing_tables = []
                 for table in critical_tables:

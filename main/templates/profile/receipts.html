@@ -24,27 +24,47 @@ body:not(.dark-theme) .receipt-card { border: 1px solid #000; background: #fff; 
     <a href="{% url 'profile' %}">← В профиль</a>
   </div>
 
-  {% if receipts %}
-  <div class="receipts-list">
-    {% for r in receipts %}
-    <div class="receipt-card">
-      <div class="receipt-info">
-        <div><strong>Чек №:</strong> {{ r.number|default:r.id }} • <strong>Заказ:</strong> #{{ r.order_id }}</div>
-        <div><strong>Дата:</strong> {{ r.created_at|date:"d.m.Y H:i" }} • <strong>Статус:</strong> {{ r.get_status_display }}</div>
-        <div><strong>Сумма:</strong> {{ r.total_amount }} ₽ • <strong>НДС {{ r.vat_rate }}%:</strong> {{ r.vat_amount }} ₽</div>
-      </div>
-      <div class="receipt-actions">
-        <a class="btn btn-secondary" href="{% url 'receipt_pdf' r.id %}" target="_blank">Открыть чек</a>
-        <a class="btn btn-secondary" href="{% url 'receipt_pdf' r.id %}?download=1" download>Скачать PDF</a>
-        <a class="btn" href="{% url 'order_detail' r.order_id %}">К заказу</a>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p>Чеки еще не сформированы.</p>
-  {% endif %}
+  <div id="receipts-loading">Загрузка чеков...</div>
+  <div class="receipts-list" id="receipts-list" style="display: none;"></div>
+  <p id="receipts-empty" style="display: none;">Чеки еще не сформированы.</p>
 </div>
+<script>
+(function() {
+  fetch('/api/receipts/', { method: 'GET', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var loading = document.getElementById('receipts-loading');
+      var listEl = document.getElementById('receipts-list');
+      var empty = document.getElementById('receipts-empty');
+      if (!loading || !listEl) return;
+      loading.style.display = 'none';
+      var receipts = (data && data.receipts) ? data.receipts : [];
+      if (receipts.length === 0) { empty.style.display = 'block'; return; }
+      listEl.style.display = 'flex';
+      var orderDetailUrl = "{% url 'order_detail' 0 %}".replace('/0/', '/');
+      receipts.forEach(function(r) {
+        var orderId = r.order || r.order_id || '';
+        var created = r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '';
+        var total = r.total_amount != null ? r.total_amount : '';
+        var vatRate = r.vat_rate != null ? r.vat_rate : '20';
+        var number = r.number || r.id || '';
+        var card = '<div class="receipt-card"><div class="receipt-info">' +
+          '<div><strong>Чек №:</strong> ' + number + ' • <strong>Заказ:</strong> #' + orderId + '</div>' +
+          '<div><strong>Дата:</strong> ' + created + ' • <strong>Статус:</strong> ' + (r.status || '') + '</div>' +
+          '<div><strong>Сумма:</strong> ' + total + ' ₽ • <strong>НДС ' + vatRate + '%</strong></div></div>' +
+          '<div class="receipt-actions">' +
+          '<a class="btn btn-secondary" href="/profile/receipts/' + r.id + '/pdf/" target="_blank">Открыть чек</a>' +
+          '<a class="btn btn-secondary" href="/profile/receipts/' + r.id + '/pdf/?download=1" download>Скачать PDF</a>' +
+          '<a class="btn" href="' + orderDetailUrl + orderId + '/">К заказу</a></div></div>';
+        listEl.insertAdjacentHTML('beforeend', card);
+      });
+    })
+    .catch(function() {
+      var loading = document.getElementById('receipts-loading');
+      if (loading) loading.textContent = 'Ошибка загрузки';
+    });
+})();
+</script>
 {% endblock %}
 
 

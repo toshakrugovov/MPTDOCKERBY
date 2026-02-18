@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}MPTCOURSE - Избранное{% endblock %}
@@ -12,49 +12,54 @@
 <section class="products-section">
     {% if user.is_authenticated %}
         <h2>Ваши избранные курсы</h2>
-        {% if favorites %}
-            <div class="products-grid">
-                {% for fav in favorites %}
-                    <div class="product-card">
-                        <div class="product-image">
-                            {% if fav.course.main_image_url %}
-                                <img src="{{ fav.course.main_image_url }}" alt="{{ fav.course.title }}">
-                            {% else %}
-                                Нет изображения
-                            {% endif %}
-                        </div>
-                        <div class="product-info">
-                            <h3>{{ fav.course.title }}</h3>
-                            <div class="product-price">
-                                {% if fav.course.discount and fav.course.discount > 0 %}
-                                    <span class="product-old-price">{{ fav.course.price }} ₽</span>
-                                    {{ fav.course.final_price|floatformat:0 }} ₽
-                                    <span class="product-discount">-{{ fav.course.discount }}%</span>
-                                {% else %}
-                                    {{ fav.course.price }} ₽
-                                {% endif %}
-                            </div>
-                            <div class="product-actions">
-                                <button type="button" class="btn-add-cart" onclick="addToCart({{ fav.course.id }}, event)">
-                                    <span class="btn-text">В корзину</span>
-                                </button>
-                                <button type="button" class="btn-remove-fav" onclick="removeFromFavorites({{ fav.course.id }}, event)">
-                                    <span class="btn-text">Удалить</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <p>У вас пока нет курсов в избранном.</p>
-        {% endif %}
+        <div id="favorites-loading">Загрузка избранного...</div>
+        <div id="favorites-grid" class="products-grid" style="display: none;"></div>
+        <p id="favorites-empty" style="display: none;">У вас пока нет курсов в избранном.</p>
     {% else %}
         <p>Пожалуйста, <a href="{% url 'login' %}">войдите в аккаунт</a>, чтобы просматривать избранное.</p>
     {% endif %}
 </section>
 
 <script>
+(function loadFavorites() {
+    if (!document.getElementById('favorites-loading')) return;
+    fetch('/api/favorites/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var loading = document.getElementById('favorites-loading');
+            var grid = document.getElementById('favorites-grid');
+            var empty = document.getElementById('favorites-empty');
+            if (!loading || !grid) return;
+            loading.style.display = 'none';
+            var list = Array.isArray(data) ? data : (data.courses || data.products || []);
+            if (list.length === 0) {
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+            grid.style.display = 'grid';
+            grid.innerHTML = '';
+            list.forEach(function(p) {
+                var img = p.main_image_url || p.cover_image_path || '';
+                var priceHtml = (p.discount && parseFloat(p.discount) > 0)
+                    ? '<span class="product-old-price">' + (p.price || '') + ' ₽</span> ' + (p.final_price || p.price) + ' ₽ <span class="product-discount">-' + p.discount + '%</span>'
+                    : (p.price || '') + ' ₽';
+                var title = (p.title || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                var card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = '<div class="product-image">' + (img ? '<img src="' + img + '" alt="' + title + '">' : 'Нет изображения') + '</div>' +
+                    '<div class="product-info"><h3>' + title + '</h3><div class="product-price">' + priceHtml + '</div>' +
+                    '<div class="product-actions"><button type="button" class="btn-add-cart" onclick="addToCart(' + p.id + ', event)"><span class="btn-text">В корзину</span></button>' +
+                    '<button type="button" class="btn-remove-fav" onclick="removeFromFavorites(' + p.id + ', event)"><span class="btn-text">Удалить</span></button></div></div>';
+                grid.appendChild(card);
+            });
+        })
+        .catch(function() {
+            var loading = document.getElementById('favorites-loading');
+            if (loading) loading.textContent = 'Ошибка загрузки избранного';
+        });
+})();
+
 function getCookie(name) {
     let cookieValue = null;
     if(document.cookie && document.cookie !== '') {

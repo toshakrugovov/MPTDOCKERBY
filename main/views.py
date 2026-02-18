@@ -800,15 +800,10 @@ def _serialize_course_images(course):
     return [{'url': course.cover_image_path, 'is_primary': True}]
 
 def home(request):
-    base_query = Course.objects.filter(is_available=True)
-    new_courses = base_query.order_by('-added_at')[:12]
-    popular_courses = base_query.order_by('-added_at')[:12]
+    # Курсы загружаются на клиенте через GET /api/catalog/
     promotions = Promotion.objects.filter(is_active=True).order_by('-start_date')[:5]
     categories = CourseCategory.objects.all()[:10]
-
     return render(request, 'home.html', {
-        'new_products': new_courses,
-        'popular_products': popular_courses,
         'promotions': promotions,
         'tags': [],
         'categories': categories
@@ -855,6 +850,11 @@ def brand_book(request):
     return render(request, 'brand_book.html')
 
 # =================== Каталог (курсы) — данные через API, view только рендер ===================
+def catalog_redirect(request, extra):
+    """Редирект /catalog/None или /catalog/<что-то>/ на /catalog/, чтобы избежать 404."""
+    return redirect('catalog')
+
+
 def catalog(request):
     categories = CourseCategory.objects.all().order_by('category_name')
     # Товары загружаются на клиенте через GET /api/catalog/
@@ -942,7 +942,8 @@ def profile_view(request):
         role_name = profile.role.role_name.strip().lower()
     # Нормализованные роли: ADMIN / MANAGER / USER
     show_admin_panel = request.user.is_superuser or role_name.upper() == 'ADMIN'
-    show_manager_panel = request.user.is_superuser or role_name in ('manager', 'менеджер')
+    # Панель менеджера только для роли «менеджер», не для админа
+    show_manager_panel = role_name in ('manager', 'менеджер') and not (request.user.is_superuser or role_name == 'admin')
 
     orders = Order.objects.filter(user=request.user).order_by('-created_at')[:5]
 
@@ -3995,33 +3996,37 @@ def update_cart_quantity(request, item_id):
 def checkout(request):
     import logging
     logger = logging.getLogger(__name__)
-    
+
+    # GET — данные загружаются через API /api/checkout-context/
+    if request.method != 'POST':
+        context = {
+            'cart': None,
+            'addresses': [],
+            'saved_payments': [],
+            'user_balance': 0,
+            'delivery_cost': 0,
+            'vat_rate': 20,
+            'vat_amount': 0,
+            'total_with_vat': 0,
+            'subtotal': 0,
+            'courses_only': True,
+        }
+        return render(request, 'checkout.html', context)
+
+    # POST — нужна корзина
     try:
         cart = Cart.objects.filter(user=request.user).prefetch_related('items', 'items__course').first()
-        logger.info(f'Checkout: пользователь {request.user.id} ({request.user.username}), корзина найдена: {cart is not None}')
-        
         if not cart:
-            logger.warning(f'Checkout: корзина не найдена для пользователя {request.user.id} ({request.user.username})')
             messages.warning(request, "Ваша корзина пуста.")
             return redirect('cart')
-        
         items = list(cart.items.select_related('course', 'course__category').all())
-        items_count = len(items)
-        logger.info(f'Checkout: количество позиций в корзине: {items_count} для пользователя {request.user.username}')
-        
-        for item in items:
-            logger.info(f'  - Позиция ID {item.id}: course_id={item.course_id}, course={item.course.title if item.course else "None"}, quantity={item.quantity}')
-        
         invalid_items = [item.id for item in items if not item.course]
         if invalid_items:
-            logger.error(f'Checkout: найдены невалидные позиции: {invalid_items}')
             messages.error(request, "В корзине есть удалённые курсы. Пожалуйста, очистите корзину.")
             return redirect('cart')
-        
-        logger.info(f'Checkout: все проверки пройдены, отображаем страницу для пользователя {request.user.id} ({request.user.username})')
     except Exception as e:
         import traceback
-        logger.error(f'Ошибка при загрузке корзины в checkout для пользователя {request.user.id}: {str(e)}\n{traceback.format_exc()}')
+        logger.error(f'Ошибка при загрузке корзины в checkout: {str(e)}\n{traceback.format_exc()}')
         messages.error(request, "Ошибка при загрузке корзины. Пожалуйста, попробуйте позже.")
         return redirect('cart')
 
@@ -4428,71 +4433,21 @@ def checkout(request):
         messages.success(request, "Заказ успешно оформлен!")
         return redirect('order_detail', pk=order.pk)
 
-    # GET запрос - показываем форму
-    logger.info(f'Checkout GET: отображение формы для пользователя {request.user.id} ({request.user.username})')
-    try:
-        addresses = UserAddress.objects.filter(user=request.user)
-        logger.info(f'Checkout: найдено адресов: {addresses.count()}')
-        saved_payments = SavedPaymentMethod.objects.filter(user=request.user)
-        logger.info(f'Checkout: найдено способов оплаты: {saved_payments.count()}')
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        
-        # Рассчитываем суммы для отображения
-        try:
-            cart_total = cart.total_price()
-            # Убеждаемся, что это Decimal
-            if not isinstance(cart_total, Decimal):
-                cart_total = Decimal(str(cart_total)) if cart_total else Decimal('0.00')
-        except (ValueError, TypeError, InvalidOperation) as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f'Ошибка при расчете суммы корзины: {str(e)}')
-            cart_total = Decimal('0.00')
-            messages.warning(request, "Ошибка при расчете суммы корзины. Пожалуйста, обновите корзину.")
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f'Неожиданная ошибка при расчете суммы корзины: {str(e)}')
-            cart_total = Decimal('0.00')
-        
-        delivery_cost = Decimal('0.00')  # курсы без доставки
-        vat_rate = Decimal('20.00')
-        try:
-            pre_vat_amount = cart_total + delivery_cost
-            vat_amount = (pre_vat_amount * vat_rate / Decimal('100')).quantize(Decimal('0.01'))
-            total_with_vat = pre_vat_amount + vat_amount
-        except (ValueError, TypeError, InvalidOperation):
-            pre_vat_amount = Decimal('0.00')
-            vat_amount = Decimal('0.00')
-            total_with_vat = Decimal('0.00')
-        
-        # Убеждаемся, что все Decimal значения корректны перед передачей в шаблон
-        try:
-            user_balance = Decimal(str(profile.balance)) if profile.balance else Decimal('0.00')
-        except (ValueError, TypeError, InvalidOperation):
-            user_balance = Decimal('0.00')
-        
-        # Преобразуем все Decimal в строки для безопасной передачи в шаблон
-        context = {
-            'cart': cart,
-            'addresses': addresses,
-            'saved_payments': saved_payments,
-            'user_balance': float(user_balance),  # Преобразуем в float для шаблона
-            'delivery_cost': float(delivery_cost),
-            'vat_rate': float(vat_rate),
-            'vat_amount': float(vat_amount),
-            'total_with_vat': float(total_with_vat),
-            'subtotal': float(cart_total),
-            'courses_only': True,  # Только онлайн-курсы, адрес доставки не нужен
-        }
-        
-        logger.info(f'Checkout: успешно отображаем страницу для пользователя {request.user.id}')
-        return render(request, 'checkout.html', context)
-    except Exception as e:
-        import traceback
-        logger.error(f'Ошибка в checkout view для пользователя {request.user.id}: {str(e)}\n{traceback.format_exc()}')
-        messages.error(request, f"Произошла ошибка при загрузке страницы оформления заказа: {str(e)}")
-        return redirect('cart')
+    # GET — данные для страницы загружаются через API /api/checkout-context/
+    context = {
+        'cart': None,
+        'addresses': [],
+        'saved_payments': [],
+        'user_balance': 0,
+        'delivery_cost': 0,
+        'vat_rate': 20,
+        'vat_amount': 0,
+        'total_with_vat': 0,
+        'subtotal': 0,
+        'courses_only': True,
+    }
+    return render(request, 'checkout.html', context)
+
 
 @login_required
 def update_cart_size(request, item_id):
@@ -6729,10 +6684,13 @@ def admin_org_account(request):
     # Получаем карты админа
     admin_cards = SavedPaymentMethod.objects.filter(user=request.user)
     
+    # Сумма к оплате налога ограничена и балансом, и резервом (списание идёт с обоих)
+    available_for_tax_payment = min(org_account.balance, org_account.tax_reserve)
     return render(request, 'main/admin/org_account.html', {
         'org_account': org_account,
         'transactions': transactions,
         'admin_cards': admin_cards,
+        'available_for_tax_payment': available_for_tax_payment,
     })
 
 @login_required
@@ -7637,19 +7595,18 @@ def admin_backup_create(request):
                 except Exception:
                     pass
                 
-                # Создаем временный файл для VACUUM INTO
+                # Создаем временный файл для VACUUM INTO (путь в формате, пригодном для SQL — без обратных слешей)
                 temp_backup = os.path.join(backup_dir, f'temp_backup_{timestamp}.sqlite3')
+                temp_backup_sql = temp_backup.replace('\\', '/')
                 
                 try:
-                    # Подключаемся к БД и выполняем VACUUM INTO
-                    # Это создаст полный бэкап со всеми данными, включая данные из WAL
                     conn = sqlite3.connect(db_path)
                     cursor = conn.cursor()
-                    
-                    # Выполняем VACUUM INTO для создания полного бэкапа
-                    # Это гарантирует включение всех данных, включая логи (ActivityLog),
-                    # избранное (Favorite), корзины (Cart), заказы (Order), чеки (Receipt) и все остальное
-                    cursor.execute(f"VACUUM INTO '{temp_backup}'")
+                    # Сначала сливаем WAL в основной файл, чтобы в бэкап попали все данные
+                    cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    conn.commit()
+                    # Выполняем VACUUM INTO для полного бэкапа (путь с прямыми слешами для SQL)
+                    cursor.execute(f"VACUUM INTO '{temp_backup_sql}'")
                     conn.commit()
                     conn.close()
                     
@@ -7728,6 +7685,7 @@ def admin_backup_create(request):
                         'savedpaymentmethod', 'cardtransaction', 'balancetransaction',
                         'supportticket', 'activitylog', 'receiptconfig',
                         'organizationaccount', 'organizationtransaction',
+                        'databasebackup',
                         'django_content_type', 'django_migrations', 'django_session',
                     ]
                     missing_tables = []

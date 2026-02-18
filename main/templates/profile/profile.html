@@ -11,50 +11,58 @@
 {% block content %}
 <div class="profile-content">
     <div class="profile-container">
-        <h2>{% if profile.full_name %}{{ profile.full_name }}{% else %}{{ request.user.username }}{% endif %}</h2>
-
-        <div class="profile-info">
-            <p><strong>ФИО:</strong> {% if profile.full_name %}{{ profile.full_name }}{% else %}<span style="color: var(--text-color-secondary);">Не указано</span> <a href="{% url 'edit_profile' %}" style="font-size: 13px;">Указать</a>{% endif %}</p>
-            {% if user.email %}
-            <p><strong>Email:</strong> {{ user.email }}</p>
-            {% endif %}
-            {% if profile.phone_number %}
-            <p><strong>Телефон:</strong> {{ profile.phone_number }}</p>
-            {% endif %}
-            {% if profile.birth_date %}
-            <p><strong>Дата рождения:</strong> {{ profile.birth_date|date:"d.m.Y" }}</p>
-            {% endif %}
+        <div class="profile-left">
+            <div class="profile-block-card">
+                <div id="profile-loading">Загрузка профиля...</div>
+                <div id="profile-block" style="display: none;">
+                    <div class="profile-block-header">
+                        <h2 id="profile-name" class="profile-block-title"></h2>
+                        <a href="{% url 'edit_profile' %}" class="profile-edit-fab" aria-label="Редактировать профиль">
+                            <span class="profile-edit-icon" aria-hidden="true">
+                                ✎
+                            </span>
+                        </a>
+                    </div>
+                    <div class="profile-info" id="profile-info"></div>
+                </div>
+            </div>
+            <div class="profile-nav-block">
+                <h3 class="profile-nav-title">Курсы</h3>
+                <div class="profile-buttons">
+                    <a href="{% url 'my_courses' %}" class="btn">Мои курсы</a>
+                </div>
+            </div>
         </div>
-
-        <div class="buttons">
-            <a href="{% url 'edit_profile' %}" class="btn">Редактировать профиль</a>
-            <a href="{% url 'my_courses' %}" class="btn">Мои курсы</a>
-            <a href="{% url 'order_history' %}" class="btn">Мои заказы</a>
-            <a href="{% url 'receipts_list' %}" class="btn">Мои чеки</a>
-            <a href="{% url 'refund_requests_list' %}" class="btn">Мои заявления на возврат</a>
-            <a href="{% url 'balance' %}" class="btn">Мой баланс</a>
-            {% if request.user.is_authenticated %}
-                {% if show_admin_panel %}
-                    <a href="{% url 'admin_dashboard' %}" class="btn">Панель администратора</a>
-                {% endif %}
-                {% if show_manager_panel %}
-                    <a href="{% url 'manager_dashboard' %}" class="btn">Панель менеджера</a>
-                {% endif %}
-            {% endif %}
-            <a href="{% url 'addresses' %}" class="btn">Мои адреса</a>
-            <a href="{% url 'payment_methods' %}" class="btn">Мои способы оплаты</a>
-            <a href="{% url 'support' %}" class="btn">Техническая поддержка</a>
-
-            <form method="post" action="{% url 'logout' %}">
-                {% csrf_token %}
-                <button type="submit" class="btn">Выйти</button>
-            </form>
-
-            <form method="post" action="{% url 'delete_account' %}" 
-                  onsubmit="return confirm('Вы уверены, что хотите удалить аккаунт? Это действие нельзя отменить.')">
-                {% csrf_token %}
-                <button type="submit" class="btn danger">Удалить аккаунт</button>
-            </form>
+        <div class="profile-right">
+            <div class="profile-nav-block">
+                <h3 class="profile-nav-title">Баланс и платежи</h3>
+                <div class="profile-buttons">
+                    <a href="{% url 'balance' %}" class="btn">Мой баланс</a>
+                    <a href="{% url 'order_history' %}" class="btn">Мои заказы</a>
+                    <a href="{% url 'receipts_list' %}" class="btn">Мои чеки</a>
+                    <a href="{% url 'refund_requests_list' %}" class="btn">Мои заявления на возврат</a>
+                </div>
+            </div>
+            <div class="profile-nav-block">
+                <h3 class="profile-nav-title">Аккаунт</h3>
+                <div class="profile-buttons">
+                    <a href="{% url 'payment_methods' %}" class="btn">Мои способы оплаты</a>
+                    <a href="{% url 'support' %}" class="btn">Техническая поддержка</a>
+                    <a href="{% url 'admin_dashboard' %}" class="btn" id="profile-admin-btn" style="display: none;">Панель администратора</a>
+                    <a href="{% url 'manager_dashboard' %}" class="btn" id="profile-manager-btn" style="display: none;">Панель менеджера</a>
+                </div>
+                <div class="profile-actions">
+                    <form method="post" action="{% url 'logout' %}" class="profile-action-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn">Выйти</button>
+                    </form>
+                    <form method="post" action="{% url 'delete_account' %}" class="profile-action-form"
+                          onsubmit="return confirm('Вы уверены, что хотите удалить аккаунт? Это действие нельзя отменить.')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn danger">Удалить аккаунт</button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -83,6 +91,41 @@
 {% endif %}
 
 <script>
+(function loadProfile() {
+    var loading = document.getElementById('profile-loading');
+    var block = document.getElementById('profile-block');
+    if (!loading || !block) return;
+    fetch('/api/profile/', { method: 'GET', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            block.style.display = 'block';
+            var nameEl = document.getElementById('profile-name');
+            var infoEl = document.getElementById('profile-info');
+            if (nameEl) nameEl.textContent = data.full_name || data.email || 'Профиль';
+            if (infoEl) {
+                var parts = [];
+                parts.push('<p><strong>ФИО:</strong> ' + (data.full_name ? (data.full_name) : '<span style="color: var(--text-color-secondary);">Не указано</span> <a href="{% url 'edit_profile' %}">Указать</a>') + '</p>');
+                if (data.email) parts.push('<p><strong>Email:</strong> ' + data.email + '</p>');
+                if (data.phone_number) parts.push('<p><strong>Телефон:</strong> ' + data.phone_number + '</p>');
+                if (data.birth_date) {
+                    var d = data.birth_date;
+                    if (d.indexOf('T') !== -1) d = d.split('T')[0];
+                    parts.push('<p><strong>Дата рождения:</strong> ' + d + '</p>');
+                }
+                infoEl.innerHTML = parts.join('');
+            }
+            var adminBtn = document.getElementById('profile-admin-btn');
+            var managerBtn = document.getElementById('profile-manager-btn');
+            if (adminBtn) adminBtn.style.display = data.show_admin_panel ? '' : 'none';
+            if (managerBtn) managerBtn.style.display = data.show_manager_panel ? '' : 'none';
+        })
+        .catch(function() {
+            if (loading) loading.textContent = 'Ошибка загрузки профиля';
+            if (block) block.style.display = 'block';
+            document.getElementById('profile-name').textContent = 'Профиль';
+        });
+})();
 (function(){
     try {
         const list = document.getElementById('notifications-list');
