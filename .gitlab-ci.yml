@@ -28,13 +28,15 @@ validate-migrations:
   stage: validate
   script:
     - source "$VENV_PATH/bin/activate"
-    - python manage.py makemigrations  --dry-run
-    
+    - python manage.py makemigrations --check --dry-run
+
 linter-check:
   stage: validate
   script:
-    - source "$VENV_PATH/bin/activate" && pip install flake8 && flake8 main mptcourse --ignore=E3,F4,F8,E7,F541,F811,F821,E26,E266 --max-line-length=120 || true
-  allow_failure: true  # ← НЕ ломается при ошибках!
+    - source "$VENV_PATH/bin/activate"
+    - pip install flake8
+    - flake8 main mptcourse --config=.flake8
+  allow_failure: true
 
 test-staticfiles:
   stage: test
